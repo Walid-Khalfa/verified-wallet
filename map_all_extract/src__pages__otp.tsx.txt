@@ -1,0 +1,569 @@
+import React, { useEffect, useRef, useState } from "react";
+import { useVaultStore } from "../services/store";
+import {
+  errorToast,
+  hashTheString,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+} from "../utils/helpers";
+import PageSlider from "../components/slider";
+import { imageAssets } from "../utils/constants";
+import { checkIsExistingUser } from "../services/contracts";
+
+const OTPPage = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+    rnPasskey: any;
+  };
+  fontsLoaded?: boolean;
+  setStep: (step: string) => void;
+  setIsLoading: (isLoading: boolean) => void;
+  setUserNumberFmt: (number: string) => void;
+  setUserEmail: (email: string) => void;
+  setIsExistingUser?: (isExistingUser: boolean) => void;
+  selectedCountry: { name: string; area: string; flag: string };
+  userNumberFmt: string;
+  userEmail: string;
+  noContract?: boolean;
+  helperFunctions?: any;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(
+    props.fontsLoaded || false
+  );
+  const inputsRef = useRef<Array<any>>([]);
+  const [searchActive, setSearchActive] = useState(false);
+  const [countdown, setCountdown] = useState(60);
+  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [otpIncorrect, setOtpIncorrect] = useState(false);
+  const [otherErrorText, setOtherErrorText] = useState("");
+
+  const { pk, vaultContract, address } = useVaultStore();
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else if (Font) {
+        //load fonts with expo-font for react native.
+        await loadAllGoogleFontsRN(Font);
+        setFontsLoaded(true);
+      } else {
+        setFontsLoaded(true);
+      }
+    };
+    if (!props.fontsLoaded) {
+      PreloadGoogleFonts();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (countdown === 0) return;
+    const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  const handleTextChange = (text: string, idx: number) => {
+    if (text?.length > 1) {
+      // Manually capture Paste
+      const paste = text.replace(/\D/g, "");
+      const newOtp = [...otp];
+      let pasteIndex = 0;
+
+      for (let i = idx; i < otp.length && pasteIndex < paste.length; i++) {
+        newOtp[i] = paste[pasteIndex];
+        pasteIndex++;
+      }
+      setOtp(newOtp);
+
+      // Focus next empty input if any
+      const nextIndex = idx + paste.length;
+      if (nextIndex < otp.length && inputsRef.current[nextIndex]) {
+        inputsRef.current[nextIndex].focus();
+      }
+      setOtpIncorrect(false);
+    } else {
+      // Normal input
+      const clean = text.replace(/\D/g, "");
+      const newOtp = [...otp];
+      newOtp[idx] = clean;
+      setOtp(newOtp);
+
+      // Move focus to next input if available
+      if (clean && inputsRef.current[idx + 1]) {
+        inputsRef.current[idx + 1].focus();
+      }
+      setOtpIncorrect(false);
+    }
+  };
+
+  const handleKeyPress = (_: any, idx: number, e: any) => {
+    const key = e.nativeEvent.key;
+
+    if (
+      key === "Backspace" &&
+      !otp[idx] &&
+      idx > 0 &&
+      inputsRef.current[idx - 1]
+    ) {
+      inputsRef.current[idx - 1].focus();
+    }
+  };
+
+  const isFilled = otp.every((d) => d.length > 0);
+
+  const getVaultId = () =>
+    props.userEmail?.length > 0
+      ? props.userEmail
+      : `+${props.selectedCountry.area}${props.userNumberFmt?.replace(
+          " ",
+          ""
+        )}`;
+
+  const handleVerifyOtp = async () => {
+    if (!isFilled || !props.helperFunctions) {
+      setOtpIncorrect(true);
+      setOtherErrorText("Please enter the complete OTP.");
+      return;
+    }
+    const vaultId = getVaultId();
+    const fullOtp = otp.join("");
+    if ((!props.noContract && !pk) || (!props.noContract && !vaultContract))
+      return;
+    props.setIsLoading(true);
+    try {
+      const valid = await props.helperFunctions.checkOTPVerification(
+        address,
+        vaultId,
+        fullOtp
+      );
+
+      if (!valid) {
+        props.setIsLoading(false);
+        setOtpIncorrect(true);
+        return;
+      }
+      const hashed = hashTheString(vaultId);
+      let exists = false;
+      if (!props.noContract && vaultContract) {
+        exists = await checkIsExistingUser(vaultContract, hashed);
+        if (exists === null) {
+          props.setIsLoading(false);
+          setOtherErrorText("Unexpected error. Try again later.");
+          setOtpIncorrect(true);
+          return;
+        }
+      }
+
+      props.setIsExistingUser?.(exists);
+      props.setIsLoading(false);
+      props.setStep("4");
+    } catch (err: any) {
+      props.setIsLoading(false);
+      setOtherErrorText("Error verifying OTP. Try again.");
+      setOtpIncorrect(true);
+      console.error("error: ", err);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!props.helperFunctions) {
+      setOtherErrorText("Helper functions missing.");
+      setOtpIncorrect(true);
+      return;
+    }
+    const vaultId = getVaultId();
+    const channel = props.userEmail ? "email" : "sms";
+    props.setIsLoading(true);
+    const res = await props.helperFunctions.sendOTPVerification(
+      address,
+      channel,
+      vaultId
+    );
+    props.setIsLoading(false);
+    if (res) {
+      setOtp(["", "", "", ""]);
+      setCountdown(60);
+      setOtpIncorrect(false);
+      setOtherErrorText("");
+    } else {
+      errorToast("OTP resend failed", "Please try again later.");
+    }
+  };
+
+  return (
+    <ScrollView>
+      {fontsLoaded && (
+        <View
+          style={
+            isReactNative ? { ...styles.verifiedCustdMdlStartupLanguage } : {}
+          }
+          className="verified-custd-mdl-startup-language"
+        >
+          <View
+            style={
+              isReactNative ? { ...styles.verifiedCustdMdlStartupContact } : {}
+            }
+            className="verified-custd-mdl-startup-contact"
+          >
+            <PageSlider
+              platform={props.platform}
+              sliderCount={[1, 2, 3]}
+              currentSlider="0"
+            />
+
+            <View
+              style={
+                isReactNative
+                  ? { ...styles.verifiedCustdMdlStartupContactContent }
+                  : {}
+              }
+              className="verified-custd-mdl-startup-contact-content"
+            >
+              <Text
+                style={
+                  isReactNative
+                    ? { ...styles.verifiedCustdMdlStartupContactText }
+                    : {}
+                }
+                className="verified-custd-mdl-startup-contact-text"
+              >
+                Enter OTP
+              </Text>
+
+              <View
+                style={
+                  isReactNative
+                    ? { ...styles.verifiedCustdMdlStartupOtpText }
+                    : {}
+                }
+                className="verified-custd-mdl-startup-otp-text"
+              >
+                <Text
+                  style={
+                    isReactNative
+                      ? { ...styles.verifiedCustdMdlStartupOtpHeaderText }
+                      : {}
+                  }
+                  className="verified-custd-mdl-startup-otp-header-text"
+                >
+                  Enter{" "}
+                  <Text
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlStartupOtpHeaderText,
+                            color: "#0C0C0E",
+                          }
+                        : { color: "#0C0C0E" }
+                    }
+                    className="verified-custd-mdl-startup-otp-header-text"
+                  >
+                    4-Digits OTP (One Time Password)
+                  </Text>{" "}
+                  sent to your{" "}
+                  {props.userNumberFmt ? "phone number" : "email address"}:
+                </Text>
+
+                <View
+                  style={
+                    isReactNative
+                      ? { ...styles.verifiedCustdMdlStartupOtpFooter }
+                      : {}
+                  }
+                  className="verified-custd-mdl-startup-otp-footer"
+                >
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupOtpFooterText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-otp-footer-text"
+                  >
+                    {props.userNumberFmt && (
+                      <React.Fragment>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlStartupOtpFooterText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-otp-footer-text"
+                        >{`(+${props.selectedCountry.area}) `}</Text>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlStartupOtpFooterText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-otp-footer-text"
+                        >
+                          {props.userNumberFmt.split(" ")[0]}{" "}
+                        </Text>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlStartupOtpFooterText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-otp-footer-text"
+                        >
+                          {props.userNumberFmt.split(" ")[1]}
+                        </Text>
+                      </React.Fragment>
+                    )}
+                    {props.userEmail && <Text>{props.userEmail}</Text>}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ background: "transparent", width: 20, height: 20 }}
+                    onPress={() => {
+                      props.setUserNumberFmt("");
+                      props.setUserEmail("");
+                      props.setStep("2");
+                    }}
+                  >
+                    <Image
+                      source={{ uri: imageAssets.editBlue }}
+                      alt="Edit"
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlStOtpIcon,
+                              width: 20,
+                              height: 20,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-st-otp-icon"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={
+                isReactNative
+                  ? { ...styles.verifiedCustdMdlOtpInputContainer }
+                  : {}
+              }
+              className="verified-custd-mdl-otp-input-container"
+            >
+              <View
+                style={
+                  isReactNative
+                    ? { ...styles.verifiedCustdMdlOtpInputGroup }
+                    : {}
+                }
+                className="verified-custd-mdl-otp-input-group"
+              >
+                {otp.map((_, idx) => (
+                  <TextInput
+                    key={idx}
+                    ref={(el: any) => (inputsRef.current[idx] = el)}
+                    value={otp[idx]}
+                    onChangeText={(text: any) => handleTextChange(text, idx)}
+                    onKeyPress={(e: any) => handleKeyPress(e, idx, e)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    style={
+                      isReactNative && otpIncorrect
+                        ? { ...styles.verifiedCustdMdlOtpInputRed }
+                        : isReactNative && !otpIncorrect
+                        ? { ...styles.verifiedCustdMdlOtpInput }
+                        : {}
+                    }
+                    className={
+                      otpIncorrect
+                        ? "verified-custd-mdl-otp-input-red"
+                        : "verified-custd-mdl-otp-input"
+                    }
+                  />
+                ))}
+              </View>
+
+              <View
+                style={
+                  isReactNative ? { ...styles.verifiedCustdMdlOtpTimer } : {}
+                }
+                className="verified-custd-mdl-otp-timer"
+              >
+                {!otpIncorrect && countdown > 5 && otherErrorText === "" && (
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlOtpTimerText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-otp-timer-text"
+                  >
+                    <Text style={{ color: "#717286", fontWeight: "400" }}>
+                      00:
+                    </Text>
+                    {countdown}
+                  </Text>
+                )}
+
+                {!otpIncorrect &&
+                  countdown <= 5 &&
+                  countdown > 0 &&
+                  otherErrorText === "" && (
+                    <Text
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlOtpTimerTextRed }
+                          : {}
+                      }
+                      className="verified-custd-mdl-otp-timer-text-red"
+                    >
+                      <Text style={{ fontWeight: "400" }}>00:</Text>
+                      {countdown}
+                    </Text>
+                  )}
+
+                {!otpIncorrect && countdown === 0 && otherErrorText === "" && (
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlOtpResendText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-otp-resend-text"
+                  >
+                    Didn't receive an OTP ?
+                  </Text>
+                )}
+
+                {otpIncorrect && otherErrorText === "" && (
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlOtpIncorrectText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-otp-incorrect-text"
+                  >
+                    Please enter the correct OTP
+                  </Text>
+                )}
+
+                {otpIncorrect && otherErrorText?.length > 0 && (
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlOtpIncorrectText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-otp-incorrect-text"
+                  >
+                    {otherErrorText}
+                  </Text>
+                )}
+
+                {!otpIncorrect && countdown > 0 && otherErrorText === "" && (
+                  <Text
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlOtpResendText }
+                        : {}
+                    }
+                    className="verified-custd-mdl-otp-resend-text"
+                  >
+                    Resend OTP
+                  </Text>
+                )}
+
+                {(!otpIncorrect && countdown === 0 && otherErrorText === "") ||
+                (otpIncorrect && otherErrorText === "") ? (
+                  <TouchableOpacity
+                    style={{ background: "transparent" }}
+                    onPress={async () => {
+                      setOtp(["", "", "", ""]);
+                      await handleResend();
+                    }}
+                  >
+                    <Text
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlOtpResendTextActive }
+                          : {}
+                      }
+                      className="verified-custd-mdl-otp-resend-text-active"
+                    >
+                      Resend OTP
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+
+            {!searchActive && <View style={{ height: "100px" }}></View>}
+
+            <View
+              style={
+                isReactNative
+                  ? { ...styles.verifiedCustdMdlStartupContactFooter }
+                  : {}
+              }
+              className="verified-custd-mdl-startup-contact-footer"
+            >
+              <TouchableOpacity
+                className={
+                  isFilled && !otpIncorrect
+                    ? "verified-custd-mdl-startup-button-active"
+                    : "verified-custd-mdl-startup-button"
+                }
+                onPress={handleVerifyOtp}
+                disabled={!isFilled || otpIncorrect}
+                style={
+                  isFilled && !otpIncorrect
+                    ? { ...styles.verifiedCustdMdlStartupButtonActive }
+                    : { ...styles.verifiedCustdMdlStartupButton }
+                }
+              >
+                <Text>Proceed</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {!fontsLoaded && <Text>Loading Module Fonts...</Text>}
+    </ScrollView>
+  );
+};
+
+export default OTPPage;

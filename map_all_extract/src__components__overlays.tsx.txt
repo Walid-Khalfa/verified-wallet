@@ -1,0 +1,234 @@
+import React from "react";
+import { imageAssets } from "../utils/constants";
+import { resolveGlobalStyleUnit } from "../utils/helpers";
+
+export const TermsAndConditionsOverlay = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+  };
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  return (
+    <Text
+      style={
+        isReactNative
+          ? {
+              ...styles.verifiedCustdMdlTermsAndCondition,
+            }
+          : {}
+      }
+      className="verified-custd-mdl-terms-and-condition"
+    >
+      By proceeding, you agree with Verified Wallet{" "}
+      <Text
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlTermsAndCondition,
+                color: "#603FF4",
+                cursor: "pointer",
+              }
+            : { color: "#603FF4", cursor: "pointer" }
+        }
+        className="verified-custd-mdl-terms-and-condition"
+      >
+        T&C
+      </Text>{" "}
+      and{" "}
+      <Text
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlTermsAndCondition,
+                color: "#603FF4",
+                cursor: "pointer",
+              }
+            : { color: "#603FF4", cursor: "pointer" }
+        }
+        className="verified-custd-mdl-terms-and-condition"
+      >
+        Privacy Policy.
+      </Text>
+    </Text>
+  );
+};
+
+export const LogoutOverlay = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+  };
+  setIsLoading: (isLoading: boolean) => void;
+  setisOnboard?: (isOnboard: boolean) => void;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const handleLogout = async () => {
+    props.setIsLoading(true);
+    try {
+      if (!isReactNative && chrome?.storage?.local) {
+        await chrome.storage.local.remove("myVault");
+        await chrome.storage.local.remove("lastPk");
+      } else if (!isReactNative && !chrome?.storage?.local && localStorage) {
+        localStorage.removeItem("myVault");
+        localStorage.removeItem("lastPk");
+      } else if (isReactNative && AsyncStorage) {
+        await AsyncStorage.removeItem("myVault");
+        await AsyncStorage.removeItem("lastPk");
+      }
+
+      if (props.setisOnboard) {
+        props.setisOnboard(false);
+      }
+    } finally {
+      props.setIsLoading(false);
+    }
+  };
+
+  return (
+    <Text
+      className="verified-custd-mdl-terms-and-condition"
+      style={
+        isReactNative
+          ? {
+              ...styles.verifiedCustdMdlTermsAndCondition,
+              fontSize: resolveGlobalStyleUnit(isReactNative, "0.7rem"),
+            }
+          : { fontSize: resolveGlobalStyleUnit(isReactNative, "0.7rem") }
+      }
+    >
+      Want to access a different account? Click{" "}
+      <Text
+        className="verified-custd-mdl-terms-and-condition"
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlTermsAndCondition,
+                color: "#603FF4",
+                cursor: "pointer",
+              }
+            : { color: "#603FF4", cursor: "pointer" }
+        }
+        onPress={handleLogout}
+      >
+        Logout
+      </Text>{" "}
+      to logout and login/create another account
+    </Text>
+  );
+};
+
+export const PrivacyOverlay = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+  };
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  return (
+    <View
+      style={
+        isReactNative
+          ? {
+              ...styles.verifiedCustdMdlPrivacy,
+            }
+          : {}
+      }
+      className="verified-custd-mdl-privacy"
+    >
+      <Image
+        source={{ uri: imageAssets.privacyTip }}
+        alt="Privacy Icon"
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlPrivacyIcon,
+              }
+            : {}
+        }
+        className="verified-custd-mdl-privacy-icon"
+      />
+      <Text
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlPrivacyText,
+              }
+            : {}
+        }
+        className="verified-custd-mdl-privacy-text"
+      >
+        Trusted by 10M+ Investors globally
+      </Text>
+    </View>
+  );
+};

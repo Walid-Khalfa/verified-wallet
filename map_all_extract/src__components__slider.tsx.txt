@@ -1,0 +1,78 @@
+import React from "react";
+
+const PageSlider = (props: {
+  sliderCount: number[];
+  currentSlider: string;
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+  };
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const current = Number(props.currentSlider);
+  const total = props.sliderCount?.length || 0;
+  const widthPercent = total > 0 ? 100 / total : 0;
+
+  return (
+    <View
+      className="verified-custd-mdl-startup-slider"
+      style={{ flexDirection: "row", height: 4, overflow: "hidden" }}
+    >
+      {props.sliderCount?.map((_, idx) => {
+        const isActive = idx <= current;
+        return (
+          <View
+            key={idx}
+            className={
+              isActive
+                ? "verified-custd-mdl-startup-slider-line-active"
+                : "verified-custd-mdl-startup-slider-line"
+            }
+            style={
+              isReactNative && isActive
+                ? {
+                    ...styles.verifiedCustdMdlStartupSliderLineActive,
+                    width: `${widthPercent}%`,
+                  }
+                : isReactNative
+                ? {
+                    ...styles.verifiedCustdMdlStartupSliderLine,
+                    width: `${widthPercent}%`,
+                  }
+                : !isReactNative && isActive
+                ? {
+                    width: `${widthPercent}%`,
+                  }
+                : { width: `${widthPercent}%` }
+            }
+          />
+        );
+      })}
+    </View>
+  );
+};
+
+export default PageSlider;

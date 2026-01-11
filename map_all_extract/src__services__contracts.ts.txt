@@ -1,0 +1,1637 @@
+import { AbiCoder, encodeBytes32String, getBytes, hexlify } from "ethers";
+import { combine, split } from "shamir-secret-sharing";
+import {
+  contractAddress,
+  Custody,
+  Provider,
+  VerifiedWallet,
+} from "@verified-network/verified-sdk";
+import {
+  decryptString,
+  decryptWithPasskey,
+  encryptString,
+  encryptWithPasskey,
+  errorToast,
+  hashTheString,
+  base64UrlEncode,
+  base64UrlDecode,
+} from "../utils/helpers";
+import {
+  defaultChainId,
+  newTransactionEventHash,
+  numberPositions,
+} from "../utils/constants";
+import { ChainConfig } from "../utils/config";
+import { VerifiedCustodyHelpers } from "../utils/types";
+import {
+  base,
+  baseSepolia,
+  gnosis,
+  mainnet,
+  polygon,
+  sepolia,
+} from "viem/chains";
+import { http } from "viem";
+import { computeNexusAccount } from "../lib/biconomyRNFix";
+
+export const checkIsExistingUser = async (
+  vaultContract: any,
+  hashedVaultId: string
+) => {
+  try {
+    return await vaultContract
+      .getCreator(hashedVaultId)
+      .then(async (res: any) => {
+        if (res?.status === 0 && res?.response?.result[0] === true) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+  } catch (err) {
+    if (process.env.REACT_APP_NODE_ENV !== "production") {
+      console.error("error while checking if user exists: ", err);
+    }
+    return null;
+  }
+};
+
+export const checkOrResetOrCreateVault = async (
+  isReactNative: boolean,
+  AsyncStorage: any,
+  EventEmitter: any,
+  vaultId: string,
+  hashedVaultId: string,
+  vaultPin: string,
+  hashedVaultPin: string,
+  otpChannel: string,
+  userPk: string,
+  userAddress: string,
+  vaultContract: any,
+  action?: string,
+  reqVaultData?: any,
+  txData?: any,
+  passKeyRawId?: any,
+  keyHolders?: string[],
+  quorum?: number
+) => {
+  try {
+    const vaultData = {
+      vaultId,
+      hashedVaultId,
+      vaultPin,
+      hashedVaultPin,
+      vaultContract,
+      rawId: passKeyRawId,
+    };
+    return await vaultContract
+      .getCreator(hashedVaultId)
+      .then(async (res: any) => {
+        if (res?.status === 0 && res?.response?.result[0] === true) {
+          try {
+            let encryptedPk: string;
+            if (!passKeyRawId) {
+              const secretKey = encodeBytes32String(vaultPin);
+
+              encryptedPk = encryptString(userPk, secretKey);
+            } else {
+              encryptedPk = await encryptWithPasskey(
+                userPk,
+                passKeyRawId,
+                vaultPin
+              );
+            }
+
+            let lastPk: any;
+            if (chrome?.storage?.local) {
+              lastPk = await new Promise((resolve) => {
+                chrome.storage.local.get(["lastPk"], (result) => {
+                  resolve(result.lastPk);
+                });
+              });
+            } else if (!chrome?.storage?.local && localStorage) {
+              lastPk = localStorage.getItem("lastPk");
+            }
+
+            if (
+              action === "reset-pin" &&
+              reqVaultData?.vaultContract &&
+              keyHolders?.length > 1 &&
+              quorum > 1 &&
+              userPk?.length > 0
+            ) {
+              const keyShardsCount = Number(keyHolders.length);
+
+              const privateKeySplits = await split(
+                getBytes(userPk),
+                Number(keyShardsCount),
+                Number(quorum)
+              );
+
+              const sharesArrayAsString = privateKeySplits.map((shard) =>
+                base64UrlEncode(shard)
+              );
+
+              const secretKey = !passKeyRawId
+                ? encodeBytes32String(vaultPin)
+                : "";
+
+              let failedKeyHolders = [];
+              let succesfulKeyHolders = [];
+
+              for (let idx = 0; idx < keyHolders.length; idx++) {
+                const participant = keyHolders[idx];
+                const encryptedShard = passKeyRawId
+                  ? await encryptWithPasskey(
+                      sharesArrayAsString[idx],
+                      passKeyRawId,
+                      vaultPin
+                    )
+                  : encryptString(sharesArrayAsString[idx], secretKey);
+                await vaultContract
+                  .addParticipant(hashedVaultId, participant, encryptedShard)
+                  .then(async (res: any) => {
+                    const keyHolder = {
+                      creatorVaultId: vaultId,
+                      vaultPin: vaultPin,
+                      creatorHashedVaultId: hashedVaultId,
+                      creatorHashedVaultPin: hashedVaultPin,
+                      cosigner: participant,
+                      hashedCosigner: participant,
+                      cosignerVaultIdType: "",
+                      cosignerVaultId: participant,
+                      share: encryptedShard,
+                    };
+                    if (res?.status === 0) {
+                      succesfulKeyHolders.push(keyHolder);
+                    } else {
+                      failedKeyHolders.push(keyHolder);
+                    }
+                  });
+
+                await new Promise((res) => setTimeout(res, 1000)); //1 second timeout to fix nonce error???
+              }
+
+              if (
+                failedKeyHolders?.length > 0 ||
+                succesfulKeyHolders?.length !== keyHolders?.length
+              ) {
+                if (process.env.REACT_APP_NODE_ENV !== "production") {
+                  console.error("error while adding co-signers");
+                }
+                errorToast(
+                  "Oops somethin went wrong",
+                  "error while adding co-signers"
+                );
+                return null;
+              }
+              const newSender = new VerifiedWallet(userPk);
+
+              const userRegAddress = await newSender.getAddress();
+              if (!isReactNative && chrome?.storage?.local) {
+                await chrome.storage.local.set({
+                  myVault: JSON.stringify({
+                    address: userAddress,
+                    regAddress: userRegAddress,
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  }),
+                });
+              } else if (
+                !isReactNative &&
+                !chrome?.storage?.local &&
+                localStorage
+              ) {
+                localStorage.setItem(
+                  "myVault",
+                  JSON.stringify({
+                    address: userAddress,
+                    regAddress: userRegAddress,
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  })
+                );
+              } else if (isReactNative && AsyncStorage) {
+                await AsyncStorage.setItem(
+                  "myVault",
+                  JSON.stringify({
+                    address: userAddress,
+                    regAddress: userRegAddress,
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  })
+                );
+              }
+              //no need to define quorum anymore we already use last quorum set
+              return {};
+            }
+
+            if (lastPk && lastPk?.length > 0) {
+              //existing PK means failed confirmParticipant, and since wallet exists??
+              return await vaultContract
+                .confirmParticipant(
+                  hashedVaultId,
+
+                  hashedVaultId,
+
+                  true
+                )
+                .then(async (cfrmRes: any) => {
+                  if (cfrmRes?.status === 0) {
+                    //delete saved pk if confirmParticipant is successful??
+                    if (!isReactNative && chrome?.storage?.local) {
+                      await chrome.storage.local.remove("lastPk");
+                    } else if (
+                      !isReactNative &&
+                      !chrome?.storage?.local &&
+                      localStorage
+                    ) {
+                      localStorage.removeItem("lastPk");
+                    } else if (isReactNative && AsyncStorage) {
+                      await AsyncStorage.removeItem("lastPk");
+                    }
+                    try {
+                      const newSender = new VerifiedWallet(userPk);
+
+                      const userRegAddress = await newSender.getAddress();
+
+                      let encryptedPk: string;
+
+                      if (!passKeyRawId) {
+                        const secretKey = encodeBytes32String(vaultPin);
+
+                        encryptedPk = encryptString(userPk, secretKey);
+                      } else {
+                        encryptedPk = await encryptWithPasskey(
+                          userPk,
+                          passKeyRawId,
+                          vaultPin
+                        );
+                      }
+
+                      if (!isReactNative && chrome?.storage?.local) {
+                        await chrome.storage.local.set({
+                          myVault: JSON.stringify({
+                            address: userAddress,
+                            regAddress: userRegAddress,
+                            vaultId,
+                            hashedVaultId: hashedVaultId,
+                            pk: encryptedPk,
+                            channel: otpChannel,
+                          }),
+                        });
+                      } else if (
+                        !isReactNative &&
+                        !chrome?.storage?.local &&
+                        localStorage
+                      ) {
+                        localStorage.setItem(
+                          "myVault",
+                          JSON.stringify({
+                            address: userAddress,
+                            regAddress: userRegAddress,
+                            vaultId,
+                            hashedVaultId: hashedVaultId,
+                            pk: encryptedPk,
+                            channel: otpChannel,
+                          })
+                        );
+                      } else if (isReactNative && AsyncStorage) {
+                        await AsyncStorage.setItem(
+                          "myVault",
+                          JSON.stringify({
+                            address: userAddress,
+                            regAddress: userRegAddress,
+                            vaultId,
+                            hashedVaultId: hashedVaultId,
+                            pk: encryptedPk,
+                            channel: otpChannel,
+                          })
+                        );
+                      }
+
+                      return vaultData;
+                    } catch (err) {
+                      errorToast(
+                        "Oops something went wrong",
+                        "Error saving new vault details. Try again later"
+                      );
+                      if (process.env.REACT_APP_NODE_ENV !== "production") {
+                        console.error("save vault failed: ", err);
+                      }
+
+                      return false;
+                    }
+                  } else {
+                    errorToast(
+                      "Oops something went wrong",
+                      "Error creating pin for existing vault. Try again later"
+                    );
+
+                    if (process.env.REACT_APP_NODE_ENV !== "production") {
+                      console.error("confirm pin vault failed: ", cfrmRes);
+                    }
+                    return false;
+                  }
+                });
+            }
+
+            if (action === "invitation") {
+              return { isExisting: true, ...vaultData };
+            } else {
+              if (!isReactNative && chrome?.storage?.local) {
+                await chrome.storage.local.set({
+                  myVault: JSON.stringify({
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  }),
+                });
+              } else if (
+                !isReactNative &&
+                !chrome?.storage?.local &&
+                localStorage
+              ) {
+                localStorage.setItem(
+                  "myVault",
+                  JSON.stringify({
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  })
+                );
+              } else if (isReactNative && AsyncStorage) {
+                await AsyncStorage.setItem(
+                  "myVault",
+                  JSON.stringify({
+                    vaultId,
+                    hashedVaultId: hashedVaultId,
+                    pk: encryptedPk,
+                    channel: otpChannel,
+                  })
+                );
+              }
+              const windowObj = !isReactNative ? window : null;
+              if (!isReactNative && chrome?.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type:
+                    action && action === "connect_wallet"
+                      ? "getPk"
+                      : action && action === "eth_requestAccounts"
+                      ? "getPk"
+                      : action && action !== "connect_wallet"
+                      ? action
+                      : "getPk",
+                  value: {
+                    vaultData:
+                      action && action === "signRecovery"
+                        ? reqVaultData
+                        : action && action === "completeRecovery"
+                        ? reqVaultData
+                        : { vaultId, hashedVaultId, hashedVaultPin },
+                    txData: txData,
+                  },
+                });
+              } else if (!isReactNative && !chrome?.runtime?.sendMessage) {
+                const event = new CustomEvent(
+                  action && action === "connect_wallet"
+                    ? "getPk"
+                    : action && action === "eth_requestAccounts"
+                    ? "getPk"
+                    : action && action !== "connect_wallet"
+                    ? action
+                    : "getPk",
+                  {
+                    detail: {
+                      value: {
+                        vaultData:
+                          action && action === "signRecovery"
+                            ? reqVaultData
+                            : action && action === "completeRecovery"
+                            ? reqVaultData
+                            : { vaultId, hashedVaultId, hashedVaultPin },
+                        txData: txData,
+                      },
+                    },
+                  }
+                );
+                windowObj?.dispatchEvent(event);
+              } else if (isReactNative && EventEmitter) {
+                const vaultEventEmitter = new EventEmitter();
+                const eventType =
+                  action && action === "connect_wallet"
+                    ? "getPk"
+                    : action && action === "eth_requestAccounts"
+                    ? "getPk"
+                    : action && action !== "connect_wallet"
+                    ? action
+                    : "getPk";
+
+                const eventDetail = {
+                  vaultData:
+                    action && action === "signRecovery"
+                      ? reqVaultData
+                      : action && action === "completeRecovery"
+                      ? reqVaultData
+                      : { vaultId, hashedVaultId, hashedVaultPin },
+                  txData: txData,
+                };
+
+                vaultEventEmitter.emit(eventType, eventDetail);
+              }
+            }
+            return action === "getPk"
+              ? {
+                  vaultId,
+                  hashedVaultId: hashedVaultId,
+                  pk: encryptedPk,
+                  channel: otpChannel,
+                  shouldStop: true,
+                }
+              : { shouldStop: true };
+          } catch (err) {
+            if (process.env.REACT_APP_NODE_ENV !== "production") {
+              console.error("error handling existing vault: ", err);
+            }
+
+            errorToast(
+              "Oops something went wrong",
+              "Error fetching existing vault key(s). Try again later"
+            );
+            return false;
+          }
+        }
+        // else if (res?.reason?.toLowerCase() === "invalid pin") {
+        //   let lastPk: any;
+        //   if (chrome?.storage?.local) {
+        //     lastPk = await new Promise((resolve) => {
+        //       chrome.storage.local.get(["lastPk"], (result) => {
+        //         resolve(result.lastPk);
+        //       });
+        //     });
+        //   } else if (!chrome?.storage?.local && localStorage) {
+        //     lastPk = localStorage.getItem("lastPk");
+        //   }
+        // if (
+        //   action === "reset-pin" &&
+        //   reqVaultData?.hashedOldPin &&
+        //   reqVaultData?.vaultContract
+        // ) {
+        //   return await resetVaultPin(
+        //     hashedVaultId,
+        //     reqVaultData?.vaultContract
+        //   );
+        // } else if (lastPk && lastPk?.length > 0) {
+        //     //existing PK means failed confirmParticipant, and since wallet exists??
+        //     return await vaultContract
+        //       .confirmParticipant(
+        //         hashedVaultId,
+
+        //         hashedVaultId,
+
+        //         true
+        //       )
+        //       .then(async (cfrmRes: any) => {
+        //         if (cfrmRes?.status === 0) {
+        //           //delete saved pk if confirmParticipant is successful??
+        //           if (!isReactNative && chrome?.storage?.local) {
+        //             await chrome.storage.local.remove("lastPk");
+        //           } else if (
+        //             !isReactNative &&
+        //             !chrome?.storage?.local &&
+        //             localStorage
+        //           ) {
+        //             localStorage.removeItem("lastPk");
+        //           } else if (isReactNative && AsyncStorage) {
+        //             await AsyncStorage.removeItem("lastPk");
+        //           }
+        //           try {
+        //             const newSender = new VerifiedWallet(userPk);
+
+        //             const userRegAddress = await newSender.getAddress();
+
+        //             let encryptedPk: string;
+
+        //             if (!passKeyRawId) {
+        //               const secretKey = encodeBytes32String(vaultPin);
+
+        //               encryptedPk = encryptString(userPk, secretKey);
+        //             } else {
+        //               encryptedPk = await encryptWithPasskey(
+        //                 userPk,
+        //                 passKeyRawId,
+        //                 vaultPin
+        //               );
+        //             }
+
+        //             if (!isReactNative && chrome?.storage?.local) {
+        //               await chrome.storage.local.set({
+        //                 myVault: JSON.stringify({
+        //                   address: userAddress,
+        //                   regAddress: userRegAddress,
+        //                   vaultId,
+        //                   hashedVaultId: hashedVaultId,
+        //                   pk: encryptedPk,
+        //                   channel: otpChannel,
+        //                 }),
+        //               });
+        //             } else if (
+        //               !isReactNative &&
+        //               !chrome?.storage?.local &&
+        //               localStorage
+        //             ) {
+        //               localStorage.setItem(
+        //                 "myVault",
+        //                 JSON.stringify({
+        //                   address: userAddress,
+        //                   regAddress: userRegAddress,
+        //                   vaultId,
+        //                   hashedVaultId: hashedVaultId,
+        //                   pk: encryptedPk,
+        //                   channel: otpChannel,
+        //                 })
+        //               );
+        //             } else if (isReactNative && AsyncStorage) {
+        //               await AsyncStorage.setItem(
+        //                 "myVault",
+        //                 JSON.stringify({
+        //                   address: userAddress,
+        //                   regAddress: userRegAddress,
+        //                   vaultId,
+        //                   hashedVaultId: hashedVaultId,
+        //                   pk: encryptedPk,
+        //                   channel: otpChannel,
+        //                 })
+        //               );
+        //             }
+
+        //             return vaultData;
+        //           } catch (err) {
+        //             errorToast(
+        //               "Oops something went wrong",
+        //               "Error saving new vault details. Try again later"
+        //             );
+        //             if (process.env.REACT_APP_NODE_ENV !== "production") {
+        //               console.error("save vault failed: ", err);
+        //             }
+
+        //             return false;
+        //           }
+        //         } else {
+        //           errorToast(
+        //             "Oops something went wrong",
+        //             "Error creating pin for existing vault. Try again later"
+        //           );
+
+        //           if (process.env.REACT_APP_NODE_ENV !== "production") {
+        //             console.error("confirm pin vault failed: ", cfrmRes);
+        //           }
+        //           return false;
+        //         }
+        //       });
+        //   } else {
+        //     return null;
+        //   }
+        // }
+        else if (res?.status === 0 && res?.response?.result[0] !== true) {
+          return await vaultContract
+            .createVault(hashedVaultId)
+            .then(async (vultRes: any) => {
+              if (vultRes?.status === 0) {
+                //temporary save the last pk incase confirmParticipant fails??
+                if (!isReactNative && chrome?.storage?.local) {
+                  await chrome.storage.local.set({
+                    lastPk: userPk,
+                  });
+                } else if (
+                  !isReactNative &&
+                  !chrome?.storage?.local &&
+                  localStorage
+                ) {
+                  localStorage.setItem("lastPk", userPk);
+                } else if (isReactNative && AsyncStorage) {
+                  await AsyncStorage.setItem("lastPk", userPk);
+                }
+                return await vaultContract
+                  .confirmParticipant(
+                    hashedVaultId,
+
+                    hashedVaultId,
+
+                    true
+                  )
+                  .then(async (cfrmRes: any) => {
+                    if (cfrmRes?.status === 0) {
+                      //delete saved pk if confirmParticipant is successful??
+                      if (!isReactNative && chrome?.storage?.local) {
+                        await chrome.storage.local.remove("lastPk");
+                      } else if (
+                        !isReactNative &&
+                        !chrome?.storage?.local &&
+                        localStorage
+                      ) {
+                        localStorage.removeItem("lastPk");
+                      } else if (isReactNative && AsyncStorage) {
+                        await AsyncStorage.removeItem("lastPk");
+                      }
+                      try {
+                        const newSender = new VerifiedWallet(userPk);
+
+                        const userRegAddress = await newSender.getAddress();
+
+                        let encryptedPk: string;
+                        if (!passKeyRawId) {
+                          const secretKey = encodeBytes32String(vaultPin);
+
+                          encryptedPk = encryptString(userPk, secretKey);
+                        } else {
+                          encryptedPk = await encryptWithPasskey(
+                            userPk,
+                            passKeyRawId,
+                            vaultPin
+                          );
+                        }
+
+                        if (!isReactNative && chrome?.storage?.local) {
+                          await chrome.storage.local.set({
+                            myVault: JSON.stringify({
+                              address: userAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: encryptedPk,
+                              channel: otpChannel,
+                            }),
+                          });
+                        } else if (
+                          !isReactNative &&
+                          !chrome?.storage?.local &&
+                          localStorage
+                        ) {
+                          localStorage.setItem(
+                            "myVault",
+                            JSON.stringify({
+                              address: userAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: encryptedPk,
+                              channel: otpChannel,
+                            })
+                          );
+                        } else if (isReactNative && AsyncStorage) {
+                          await AsyncStorage.setItem(
+                            "myVault",
+                            JSON.stringify({
+                              address: userAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: encryptedPk,
+                              channel: otpChannel,
+                            })
+                          );
+                        }
+
+                        return vaultData;
+                      } catch (err) {
+                        errorToast(
+                          "Oops something went wrong",
+                          "Error saving new vault details. Try again later"
+                        );
+                        if (process.env.REACT_APP_NODE_ENV !== "production") {
+                          console.error("save vault failed: ", err);
+                        }
+
+                        return false;
+                      }
+                    } else {
+                      errorToast(
+                        "Oops something went wrong",
+                        "Error creating pin for new vault. Try again later"
+                      );
+
+                      if (process.env.REACT_APP_NODE_ENV !== "production") {
+                        console.error("confirm pin vault failed: ", cfrmRes);
+                      }
+                      return false;
+                    }
+                  });
+              } else {
+                errorToast(
+                  "Oops something went wrong",
+                  "Error creating new vault. Try again later"
+                );
+                if (process.env.REACT_APP_NODE_ENV !== "production") {
+                  console.error("create vault failed: ", vultRes);
+                }
+
+                return false;
+              }
+            });
+        }
+      });
+  } catch (err) {
+    if (process.env.REACT_APP_NODE_ENV !== "production") {
+      console.error("unexpected error: ", err);
+    }
+    errorToast(
+      "Oops something went wrong",
+      "Error while creating pin. Try again later"
+    );
+    return false;
+  }
+};
+
+export const validateVaultPin = async (
+  vaultId: string,
+  hashedVaultId: string,
+  vaultPin: string,
+  hashedVaultPin: string,
+  encryptedPk: any,
+  userAddress: string,
+  otpChannel: "sms" | "email",
+  chainId?: number,
+  includePk?: boolean,
+  newChainId?: number,
+  passKeyRawId?: any
+) => {
+  try {
+    let userPk: any;
+
+    if (!passKeyRawId) {
+      const secretKey = encodeBytes32String(vaultPin);
+      userPk = decryptString(encryptedPk, secretKey);
+    } else {
+      userPk = await decryptWithPasskey(encryptedPk, passKeyRawId);
+    }
+
+    if (userPk) {
+      const cntAddresses: any = contractAddress;
+      const sender = new VerifiedWallet(userPk);
+      const _chainId =
+        chainId &&
+        cntAddresses[chainId]?.Custody &&
+        ChainConfig[chainId]?.rpcUrls?.length > 0
+          ? chainId
+          : defaultChainId;
+
+      // console.log("chainId to use: ", _chainId);
+      const provider = ChainConfig[_chainId]?.rpcUrls[0];
+      const signer = sender.setProvider(new Provider(provider));
+
+      const vaultContract = new Custody(signer, cntAddresses[_chainId].Custody);
+
+      if (vaultContract) {
+        return await vaultContract
+          .getCreator(hashedVaultId)
+          .then(async (res: any) => {
+            if (res?.status === 0 && res?.response?.result[0] === true) {
+              const quorumSet = await vaultContract.getQuorum(hashedVaultId);
+              if (
+                quorumSet?.status === 0 &&
+                quorumSet?.response?.result?.length > 0
+              ) {
+                return includePk && Number(quorumSet?.response?.result[0]) > 0
+                  ? {
+                      address: userAddress,
+                      vaultId,
+                      hashedVaultId: hashedVaultId,
+                      channel: otpChannel,
+                      chainId: newChainId ? newChainId : _chainId,
+                      pin: vaultPin,
+                      rawId: passKeyRawId,
+                      pk: userPk,
+                    }
+                  : Number(quorumSet?.response?.result[0]) === 0
+                  ? {
+                      address: userAddress,
+                      vaultId,
+                      hashedVaultId: hashedVaultId,
+                      channel: otpChannel,
+                      chainId: newChainId ? newChainId : _chainId,
+                      pin: vaultPin,
+                      rawId: passKeyRawId,
+                      pk: userPk,
+                      inCompleteVault: true,
+                    }
+                  : {
+                      address: userAddress,
+                      vaultId,
+                      hashedVaultId: hashedVaultId,
+                      channel: otpChannel,
+                      chainId: newChainId ? newChainId : _chainId,
+                      pin: vaultPin,
+                      rawId: passKeyRawId,
+                    };
+              } else {
+                //For account recovery....
+                return includePk
+                  ? {
+                      address: userAddress,
+                      vaultId,
+                      hashedVaultId: hashedVaultId,
+                      channel: otpChannel,
+                      chainId: newChainId ? newChainId : _chainId,
+                      pin: vaultPin,
+                      rawId: passKeyRawId,
+                      pk: userPk,
+                    }
+                  : {
+                      address: userAddress,
+                      vaultId,
+                      hashedVaultId: hashedVaultId,
+                      channel: otpChannel,
+                      chainId: newChainId ? newChainId : _chainId,
+                      pin: vaultPin,
+                      rawId: passKeyRawId,
+                    };
+              }
+            } else {
+              if (process.env.REACT_APP_NODE_ENV !== "production") {
+                console.error("Account does not exist");
+              }
+              return null;
+            }
+          });
+      } else {
+        if (process.env.REACT_APP_NODE_ENV !== "production") {
+          console.error("error getting vault contract");
+        }
+        return null;
+      }
+    } else {
+      if (process.env.REACT_APP_NODE_ENV !== "production") {
+        console.error("error decrypting pk");
+      }
+      return null;
+    }
+  } catch (err) {
+    if (process.env.REACT_APP_NODE_ENV !== "production") {
+      console.error("unexpected error: ", err);
+    }
+    return null;
+  }
+};
+
+export const acceptOrRejectInvitation = async (
+  sendCreatorAcceptance: VerifiedCustodyHelpers["sendCreatorAcceptance"],
+  sendCreatorRejection: VerifiedCustodyHelpers["sendCreatorRejection"],
+  channel: "email" | "sms",
+  hashedCosignerId: string,
+  hashedCosignerPin: string,
+  hashedCreatorVaultId: string,
+  hashedCreatorVaultPin: string,
+  creatorVaultId: string,
+  coSignerVaultId: string,
+  accepted: boolean,
+  vaultContract?: any,
+  userPk?: string,
+  chainId?: number
+) => {
+  let contract: any;
+  if (vaultContract) {
+    contract = vaultContract;
+  } else {
+    const cntAddresses: any = contractAddress;
+    const sender = new VerifiedWallet(userPk);
+    const _chainId =
+      chainId &&
+      cntAddresses[chainId]?.Custody &&
+      ChainConfig[chainId]?.rpcUrls?.length > 0
+        ? chainId
+        : defaultChainId;
+    const provider = ChainConfig[_chainId]?.rpcUrls[0];
+    const signer = sender.setProvider(new Provider(provider));
+
+    contract = new Custody(signer, cntAddresses[_chainId].Custody);
+  }
+  if (contract) {
+    return await contract
+      .confirmParticipant(hashedCreatorVaultId, hashedCosignerId, accepted)
+      .then(async (res: any) => {
+        if (res?.status === 0) {
+          if (accepted) {
+            await sendCreatorAcceptance(
+              channel,
+              creatorVaultId,
+              coSignerVaultId,
+              hashedCosignerPin
+            );
+          } else {
+            await sendCreatorRejection(
+              channel,
+              creatorVaultId,
+              coSignerVaultId,
+              hashedCosignerPin
+            );
+          }
+
+          return true;
+        } else {
+          if (process.env.REACT_APP_NODE_ENV !== "production") {
+            console.error("Accept or reject invitation failed with");
+          }
+          return false;
+        }
+      })
+      .catch((err: any) => {
+        if (process.env.REACT_APP_NODE_ENV !== "production") {
+          console.error("Accept or reject invitation failed with error: ", err);
+        }
+        return false;
+      });
+  } else {
+    return false;
+  }
+};
+
+// const retryCompleteVault = async () => {
+//   failedParticipants = [...new Set(failedParticipants)]
+//   await Promise.all(
+//     failedParticipants.map(async (participant, idx) => {
+//          const retryAdd = await mainService.vault.addParticipant(
+//         vaultInfo.hashedVaultId,
+//         vaultInfo.hashedVaultPin,
+//         participant.hashedCosigner,
+//         participant.share
+//       )
+
+//       if (retryAdd.status) {
+//         // failedParticipants.push({
+//         //   creatorVaultId: ,
+//         //   fcmToken,
+//         //   cosigner,
+//         //   share: sharesArrayAsString[idx],
+//         // })
+//       } else {
+//         const filtered = failedParticipants.filter(
+//           (part) => part.cosigner !== participant.cosigner
+//         )
+//         failedParticipants = [...new Set(filtered)]
+//         await sendNotification({
+//           creator: vaultInfo.vaultId,
+//           hashedCreator: vaultInfo.hashedVaultId,
+//           idType: participant.idType,
+//           email: participant.cosigner,
+//           phoneNumber: participant.cosigner,
+//         })
+//       }
+//     })
+//   )
+
+//   if (failedParticipants.length > 0) {
+//     setIsRetry(true)
+//     setIsLoading(false)
+//     return
+//   }
+
+//   const addQuorum = await mainService.vault.defineQuorum(
+//     vaultInfo.hashedVaultId,
+//     vaultInfo.hashedVaultPin,
+//     threshold.toString() // coming from the slider
+//   )
+
+//   if (addQuorum.status) {
+//     return false
+//   }
+//   return true
+// }
+
+export const completeVaultCreation = async (
+  sendCoSignerInvitation: (
+    channel: "sms" | "email",
+    cosigerId: string,
+    creatorId: string,
+    hashedCretorPin: string
+  ) => Promise<boolean>,
+  sendCreatorConfirmation: (
+    channel: "sms" | "email",
+    creatorId: string,
+    cosigersList: [],
+    requiredSigners: number,
+    hashedCretorPin: string,
+    isRemoved?: boolean
+  ) => Promise<boolean>,
+  keyHolders: any,
+  coSigners: any,
+  otpChannel: "sms" | "email",
+  KeyThreshold: number,
+  vaultId: string,
+  hashedVaultId: string,
+  vaultPin: string,
+  hashedVaultPin: string,
+  vaultContract: any,
+  pk: string,
+  passKeyRawId?: any,
+  action?: string
+) => {
+  const keyShardsCount = Number(keyHolders.length);
+
+  const privateKeySplits = await split(
+    getBytes(pk),
+    Number(keyShardsCount),
+    KeyThreshold
+  );
+
+  const sharesArrayAsString = privateKeySplits.map((shard) =>
+    base64UrlEncode(shard)
+  );
+
+  const secretKey = !passKeyRawId ? encodeBytes32String(vaultPin) : "";
+
+  let failedKeyHolders = [];
+  let succesfulKeyHolders = [];
+
+  for (let idx = 0; idx < keyHolders.length; idx++) {
+    const participant = keyHolders[idx];
+    const encryptedShard = passKeyRawId
+      ? await encryptWithPasskey(
+          sharesArrayAsString[idx],
+          passKeyRawId,
+          vaultPin
+        )
+      : encryptString(sharesArrayAsString[idx], secretKey);
+    await vaultContract
+      .addParticipant(
+        hashedVaultId,
+        action === "remove-cosigner"
+          ? participant
+          : hashTheString(participant.vaultId),
+        encryptedShard
+      )
+      .then(async (res: any) => {
+        const keyHolder =
+          action === "remove-cosigner"
+            ? {
+                creatorVaultId: vaultId,
+                vaultPin: vaultPin,
+                creatorHashedVaultId: hashedVaultId,
+                creatorHashedVaultPin: hashedVaultPin,
+                cosigner: participant,
+                hashedCosigner: participant,
+                cosignerVaultIdType: "",
+                cosignerVaultId: participant,
+                share: encryptedShard,
+              }
+            : {
+                creatorVaultId: vaultId,
+                vaultPin: vaultPin,
+                creatorHashedVaultId: hashedVaultId,
+                creatorHashedVaultPin: hashedVaultPin,
+                cosigner: participant.vaultId,
+                hashedCosigner: hashTheString(participant.vaultId),
+                cosignerVaultIdType:
+                  participant.otpChannel === "sms" ? "PHONE" : "EMAIL",
+                cosignerVaultId: participant.vaultId,
+                share: encryptedShard,
+                ...participant,
+              };
+        if (res?.status === 0) {
+          succesfulKeyHolders.push(keyHolder);
+          if (action !== "remove-cosigner" && participant.vaultId !== vaultId) {
+            await sendCoSignerInvitation(
+              participant.otpChannel,
+              participant.vaultId,
+              vaultId,
+              hashedVaultPin
+            ).then((res) => {
+              if (!res) {
+                if (process.env.REACT_APP_NODE_ENV !== "production") {
+                  console.error("error while sending cosigner invite");
+                }
+                // errorToast("Oops somethin went wrong", "error while sending cosigner invite");
+              }
+            });
+          }
+        } else {
+          failedKeyHolders.push(keyHolder);
+        }
+      });
+
+    await new Promise((res) => setTimeout(res, 1000)); //1 second timeout to fix nonce error???
+  }
+
+  if (
+    failedKeyHolders?.length > 0 ||
+    succesfulKeyHolders?.length !== keyHolders?.length
+  ) {
+    if (process.env.REACT_APP_NODE_ENV !== "production") {
+      console.error("error while adding co-signers");
+    }
+    errorToast("Oops somethin went wrong", "error while adding co-signers");
+    return false;
+  }
+
+  return await vaultContract
+    .defineQuorum(hashedVaultId, KeyThreshold.toString())
+    .then(async (res: any) => {
+      if (res?.status === 0 && action !== "remove-cosigner") {
+        const cosignersList = coSigners?.map((cng: any) => {
+          return {
+            name: cng?.name,
+            email: cng?.email,
+            phoneNumber: cng?.phoneNumber,
+            contactType: String(cng?.otpChannel)?.toUpperCase(),
+            position: `${numberPositions[Number(cng?.position)]} Co-Signer`,
+          };
+        });
+        await sendCreatorConfirmation(
+          otpChannel,
+          vaultId,
+          cosignersList,
+          Number(KeyThreshold),
+          hashedVaultPin
+        ).then((res) => {
+          if (!res) {
+            if (process.env.REACT_APP_NODE_ENV !== "production") {
+              console.error("error while sending creator's confirmation");
+            }
+            // errorToast("Oops somethin went wrong", "error while sending creator's confirmation");
+          }
+        });
+
+        return true;
+      } else if (res?.status === 0 && action === "remove-cosigner") {
+        const removeCosignerPromise = coSigners?.map(async (cng: any) => {
+          const removeRes = await vaultContract.removeParticipant(
+            hashedVaultId,
+            hashTheString(cng?.vaultId)
+          );
+          if (removeRes?.status === 0) {
+            return "true";
+          } else {
+            return "false";
+          }
+        });
+        const promisesResult = await Promise.all(removeCosignerPromise);
+
+        if (promisesResult?.find((res) => res === "false")?.length > 0) {
+          return false;
+        }
+
+        const cosignersList = coSigners?.map((cng: any) => {
+          return {
+            email: cng?.email,
+            phoneNumber: cng?.phoneNumber,
+            contactType: String(cng?.otpChannel)?.toUpperCase(),
+            position: `${numberPositions[Number(cng?.position)]} Co-Signer`,
+          };
+        });
+
+        await sendCreatorConfirmation(
+          otpChannel,
+          vaultId,
+          cosignersList,
+          Number(KeyThreshold),
+          hashedVaultPin,
+          true
+        ).then((res) => {
+          if (!res) {
+            if (process.env.REACT_APP_NODE_ENV !== "production") {
+              console.error("error while sending creator's confirmation");
+            }
+            // errorToast("Oops somethin went wrong", "error while sending creator's confirmation");
+          }
+        });
+
+        return true;
+      } else {
+        if (process.env.REACT_APP_NODE_ENV !== "production") {
+          console.error("error while saving vault keys");
+        }
+        errorToast("Oops somethin went wrong", "error while saving vault keys");
+        return false;
+      }
+    });
+};
+
+export const initiateVaultRecovery = async (
+  sendCreatorInitiation: (
+    channel: "sms" | "email",
+    creatorId: string,
+    hashedCretorPin: string,
+    txId: number,
+    requiredSigners: number
+  ) => Promise<boolean>,
+  hashedVaultId: string,
+  hashedVaultPin: string,
+  vaultId: string,
+  vaultPin: string,
+  encryptedPk: string,
+  vaultChannel: "sms" | "email",
+  chainId?: number,
+  passKeyRawId?: any
+) => {
+  let userPk: any;
+
+  if (!passKeyRawId) {
+    const secretKey = encodeBytes32String(vaultPin);
+    userPk = decryptString(encryptedPk, secretKey);
+  } else {
+    userPk = await decryptWithPasskey(encryptedPk, passKeyRawId);
+  }
+
+  if (userPk) {
+    const cntAddresses: any = contractAddress;
+    const sender = new VerifiedWallet(userPk);
+    const _chainId =
+      chainId &&
+      cntAddresses[chainId]?.Custody &&
+      ChainConfig[chainId]?.rpcUrls?.length > 0
+        ? chainId
+        : defaultChainId;
+    const provider = ChainConfig[_chainId]?.rpcUrls[0];
+    const signer = sender.setProvider(new Provider(provider));
+
+    const vaultContract = new Custody(signer, cntAddresses[_chainId].Custody);
+
+    if (vaultContract) {
+      return await vaultContract
+        .promptSignatures(hashedVaultId)
+        .then(async (res: any) => {
+          // console.log("propmt signature: ", res);
+          if (res?.status === 0 && res?.response?.hash) {
+            const abiCoder = new AbiCoder();
+            let txId: any, vaultLogsLength: number;
+            if (res?.response?.result?.logs?.length > 0) {
+              const vaultLogs = res?.response?.result?.logs?.filter(
+                (log: any) =>
+                  log?.address?.toLowerCase() ===
+                    cntAddresses[_chainId].Custody?.toLowerCase() &&
+                  log?.topics
+                    ?.map((tp: string) => tp?.toLowerCase())
+                    ?.includes(newTransactionEventHash?.toLowerCase())
+              );
+              vaultLogsLength = vaultLogs?.length;
+              const txData = vaultLogs[0]?.data;
+
+              const decodedTxData = abiCoder
+                .decode(["bytes32", "bytes32", "uint256"], txData)
+                ?.map((val, idx) => (idx < 2 ? val : Number(val)))
+                .flat();
+              txId = decodedTxData[decodedTxData?.length - 1];
+            } else {
+              const newProv = new Provider(provider);
+              const receipt = await newProv.getTransactionReceipt(
+                res?.response?.hash
+              );
+              const logs = receipt.logs;
+              const vaultLogs = logs?.filter(
+                (log: any) =>
+                  log?.address?.toLowerCase() ===
+                    cntAddresses[_chainId].Custody?.toLowerCase() &&
+                  log?.topics
+                    ?.map((tp: string) => tp?.toLowerCase())
+                    ?.includes(newTransactionEventHash?.toLowerCase())
+              );
+              vaultLogsLength = vaultLogs?.length;
+              const txData = vaultLogs[0]?.data;
+              const decodedTxData = abiCoder
+                .decode(["bytes32", "bytes32", "uint256"], txData)
+                ?.map((val, idx) => (idx < 2 ? val : Number(val)))
+                .flat();
+              txId = decodedTxData[decodedTxData?.length - 1];
+            }
+            await sendCreatorInitiation(
+              vaultChannel,
+              vaultId,
+              hashedVaultPin,
+              Number(txId),
+              Number(vaultLogsLength)
+            );
+            return true;
+          } else {
+            if (process.env.REACT_APP_NODE_ENV !== "production") {
+              console.error("prompt signatures failed", res);
+            }
+            return false;
+          }
+        })
+        .catch((err: any) => {
+          if (process.env.REACT_APP_NODE_ENV !== "production") {
+            console.error("error while initiating vault recovery", err);
+          }
+          return false;
+        });
+    }
+  }
+};
+
+export const signVaultRecovery = async (
+  sendCreatorSigned: (
+    channel: "sms" | "email",
+    creatorId: string,
+    coSignerId: string,
+    vaultPinHashed: string
+  ) => Promise<boolean>,
+  sendCreatorCompleted: (
+    channel: "sms" | "email",
+    creatorId: string,
+    coSignerId: string,
+    vaultPinHashed: string,
+    txId: number
+  ) => Promise<boolean>,
+  hashedVaultId: string,
+  hashedVaultPin: string,
+  vaultId: string,
+  vaultPin: string,
+  encryptedPk: string,
+  reqVaultId: string,
+  hashedReqId: string,
+  hashedReqPin: string,
+  reqTxId: string,
+  chainId?: number,
+  passKeyRawId?: any
+) => {
+  let userPk: any;
+
+  if (!passKeyRawId) {
+    const secretKey = encodeBytes32String(vaultPin);
+    userPk = decryptString(encryptedPk, secretKey);
+  } else {
+    userPk = await decryptWithPasskey(encryptedPk, passKeyRawId);
+  }
+
+  if (userPk) {
+    const cntAddresses: any = contractAddress;
+    const sender = new VerifiedWallet(userPk);
+    const _chainId =
+      chainId &&
+      cntAddresses[chainId]?.Custody &&
+      ChainConfig[chainId]?.rpcUrls?.length > 0
+        ? chainId
+        : defaultChainId;
+    const provider = ChainConfig[_chainId]?.rpcUrls[0];
+    const signer = sender.setProvider(new Provider(provider));
+
+    const vaultContract = new Custody(signer, cntAddresses[_chainId].Custody);
+
+    if (vaultContract) {
+      return await vaultContract
+        .signTransaction(hashedReqId, hashedVaultId, String(reqTxId))
+        .then(async (res: any) => {
+          if (res?.status === 0) {
+            await sendCreatorSigned(
+              /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reqVaultId) ? "email" : "sms",
+              reqVaultId,
+              vaultId,
+              hashedVaultPin
+            );
+            return await vaultContract
+              .checkQuorum(hashedReqId, reqTxId)
+              .then(async (qRes: any) => {
+                if (qRes?.status === 0 && qRes?.response?.result) {
+                  if (qRes?.response?.result[0] === true) {
+                    await sendCreatorCompleted(
+                      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reqVaultId)
+                        ? "email"
+                        : "sms",
+                      reqVaultId,
+                      vaultId,
+                      hashedVaultPin,
+                      Number(reqTxId)
+                    );
+                  }
+                  return true;
+                } else {
+                  return false;
+                }
+              });
+          } else {
+            return false;
+          }
+        })
+        .catch((err: any) => {
+          if (process.env.REACT_APP_NODE_ENV !== "production") {
+            console.error("error while signing vault recovery", err);
+          }
+          return false;
+        });
+    }
+  }
+};
+
+export const restoreVaultLogin = async (
+  isReactNative: boolean,
+  AsyncStorage: any,
+  hashedVaultId: string,
+  hashedVaultPin: string,
+  vaultId: string,
+  vaultPin: string,
+  encryptedPk: string,
+  reqTxId: string,
+  otpChannel: "sms" | "email",
+  chainId?: number,
+  passKeyRawId?: any
+) => {
+  let userPk: any;
+
+  if (!passKeyRawId) {
+    const secretKey = encodeBytes32String(vaultPin);
+
+    userPk = decryptString(encryptedPk, secretKey);
+  } else {
+    userPk = await decryptWithPasskey(encryptedPk, passKeyRawId);
+  }
+
+  if (userPk) {
+    const cntAddresses: any = contractAddress;
+    const sender = new VerifiedWallet(userPk);
+    const _chainId =
+      chainId &&
+      cntAddresses[chainId]?.Custody &&
+      ChainConfig[chainId]?.rpcUrls?.length > 0
+        ? chainId
+        : defaultChainId;
+    const provider = ChainConfig[_chainId]?.rpcUrls[0];
+    const signer = sender.setProvider(new Provider(provider));
+
+    const vaultContract = new Custody(signer, cntAddresses[_chainId].Custody);
+
+    if (vaultContract) {
+      return await vaultContract
+        .checkQuorum(hashedVaultId, reqTxId)
+        .then(async (qRes: any) => {
+          if (qRes?.status === 0 && qRes?.response?.result) {
+            if (qRes?.response?.result[0] === true) {
+              return await vaultContract
+                .getShards(hashedVaultId, reqTxId)
+                .then(async (res: any) => {
+                  if (res?.status === 0 && res?.response?.result) {
+                    const recoveredShrads = res?.response?.result.filter(
+                      (shrd: string) => shrd !== ""
+                    );
+                    if (recoveredShrads.length > 1) {
+                      //at least 2 shrads?? since minimum signers are 2??
+                      const secretKey = !passKeyRawId
+                        ? encodeBytes32String(vaultPin)
+                        : "";
+                      // const decryptedShares = recoveredShrads.map(
+                      //   (shrd: string) => decryptString(shrd, secretKey)
+                      // );
+
+                      const decryptedShares = await Promise.all(
+                        recoveredShrads.map((shrd: string) =>
+                          passKeyRawId
+                            ? decryptWithPasskey(shrd, passKeyRawId)
+                            : decryptString(shrd, secretKey)
+                        )
+                      );
+
+                      const shares = decryptedShares.map((shrd: string) =>
+                        base64UrlDecode(shrd)
+                      );
+
+                      const combinedShares = await combine(shares);
+
+                      const pk = hexlify(combinedShares);
+
+                      if (pk) {
+                        const secretKey = !passKeyRawId
+                          ? encodeBytes32String(vaultPin)
+                          : "";
+
+                        const newEncryptedPk = passKeyRawId
+                          ? await encryptWithPasskey(pk, passKeyRawId, vaultPin)
+                          : encryptString(pk, secretKey);
+
+                        const newSender = new VerifiedWallet(pk);
+
+                        const userRegAddress = await newSender.getAddress();
+
+                        const newSigner = newSender.setProvider(
+                          new Provider(provider)
+                        );
+
+                        const _newsigner: any = newSigner;
+                        const chainToUse = [
+                          base,
+                          mainnet,
+                          gnosis,
+                          polygon,
+                          sepolia,
+                          baseSepolia,
+                        ].find((nt) => Number(nt?.id) === Number(_chainId));
+                        const nexAddress = await computeNexusAccount(
+                          chainToUse,
+                          http(),
+                          _newsigner
+                        );
+                        if (!isReactNative && chrome?.storage?.local) {
+                          await chrome.storage.local.set({
+                            myVault: JSON.stringify({
+                              address: nexAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: newEncryptedPk,
+                              channel: otpChannel,
+                            }),
+                          });
+                        } else if (
+                          !isReactNative &&
+                          !chrome?.storage?.local &&
+                          localStorage
+                        ) {
+                          localStorage.setItem(
+                            "myVault",
+                            JSON.stringify({
+                              address: nexAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: newEncryptedPk,
+                              channel: otpChannel,
+                            })
+                          );
+                        } else if (isReactNative && AsyncStorage) {
+                          await AsyncStorage.setItem(
+                            "myVault",
+                            JSON.stringify({
+                              address: nexAddress,
+                              regAddress: userRegAddress,
+                              vaultId,
+                              hashedVaultId: hashedVaultId,
+                              pk: newEncryptedPk,
+                              channel: otpChannel,
+                            })
+                          );
+                        }
+                        //clean transaction
+                        //   const cntAddresses: any = contractAddress;
+                        // const signerCustodyContract = new Custody(newSigner, cntAddresses[_chainId]?.Custody);
+                        // await signerCustodyContract.cleanTx(hashedVaultId, String(reqTxId));
+                        return true;
+                      }
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                })
+                .catch((err: any) => {
+                  if (process.env.REACT_APP_NODE_ENV !== "production") {
+                    console.error("error while restoring login access", err);
+                  }
+                  return false;
+                });
+            } else {
+              return false;
+            }
+          } else {
+            return false;
+          }
+        })
+        .catch((err: any) => {
+          if (process.env.REACT_APP_NODE_ENV !== "production") {
+            console.error("error while restoring login access", err);
+          }
+          return false;
+        });
+    } else {
+      return false;
+    }
+  }
+};
+
+// export const resetVaultPin = async (
+//   hashedVaultId: string,
+//   hashedOldPin: string,
+//   hashedNewPin: string,
+//   vaultContract: any
+// ) => {
+//   return await vaultContract
+//     .resetPin(hashedVaultId)
+//     .then(async (res: any) => {
+//       const trueAny: any = true;
+//       if (res?.status === 0) {
+//         return await vaultContract
+//           .confirmParticipant(
+//             hashedVaultId,
+//             hashedNewPin,
+//             hashedVaultId,
+//             hashedNewPin,
+//             trueAny
+//           )
+//           .then((cRes: any) => {
+//             if (cRes?.status === 0) {
+//               return {};
+//             } else {
+//               return null;
+//             }
+//           });
+//       } else {
+//         return null;
+//       }
+//     });
+// };

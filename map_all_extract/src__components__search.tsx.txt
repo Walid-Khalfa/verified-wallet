@@ -1,0 +1,244 @@
+import React, { useState } from "react";
+import { imageAssets } from "../utils/constants";
+
+const SearchBox = (props: any) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const [newSearchContent, setNewSearchContent] = useState(null);
+
+  const handleSearch = (value: string) => {
+    if (value === "") {
+      setNewSearchContent(null);
+      return;
+    }
+
+    const filtered = props.searchContent.filter((src: any) => {
+      const name = src?.name?.toLowerCase();
+      const input = value.toLowerCase();
+
+      if (name?.includes(input)) {
+        src.searched = input;
+        src.nameArray = src.name.split("");
+        return src;
+      }
+    });
+
+    setNewSearchContent(filtered);
+    props.handleButtonDisplay();
+  };
+
+  const handleSelect = (src: any, idx: number) => {
+    if (props.type === "area-code") {
+      props.setSelected({
+        area: src.phone_code,
+        flag: src.flag,
+        name: src.name,
+      });
+    } else if (props.type === "language") {
+      props.setSelected(src.name);
+    }
+
+    if (props.setSearchActive) {
+      props.setSearchActive(false);
+    }
+
+    props.handleButtonDisplay();
+  };
+
+  const renderTextHighlight = (array: string[], search: string) =>
+    array.map((char, idx) => {
+      const isHighlighted = search.includes(char.toLowerCase());
+      return (
+        <Text
+          key={idx}
+          style={isHighlighted ? styles.boldText : styles.fadedText}
+        >
+          {char}
+        </Text>
+      );
+    });
+
+  const renderResults = (data: any[], isFiltered: boolean = false) => {
+    return data.map((src, idx) => {
+      const isActive = !isReactNative
+        ? window?.location?.search === `?${idx}`
+        : false;
+      const isSelected = props.selected && props.selected.length > 0;
+
+      const contentContainerClass =
+        props.type === "language" && isActive
+          ? "verified-custd-mdl-ms-search-content-active"
+          : "verified-custd-mdl-ms-search-content";
+
+      return (
+        <TouchableOpacity
+          key={idx}
+          className={contentContainerClass}
+          style={styles.resultItem}
+          onPress={() => handleSelect(src, idx)}
+        >
+          <View style={styles.resultInner}>
+            <Image
+              source={{ uri: props.type === "language" ? src.icon : src.flag }}
+              alt="Icon"
+              className="verified-custd-mdl-ms-search-content-icon"
+              style={styles.icon}
+            />
+
+            <Text
+              className="verified-custd-mdl-ms-search-content-text"
+              style={styles.resultText}
+            >
+              {src.nameArray && src.searched
+                ? renderTextHighlight(src.nameArray, src.searched)
+                : src.name}
+              {props.type === "language" && src.label && (
+                <Text
+                  style={
+                    src.searched?.includes(src.label.toLowerCase())
+                      ? {}
+                      : styles.fadedText
+                  }
+                >
+                  {` (${src.label})`}
+                </Text>
+              )}
+            </Text>
+          </View>
+
+          {props.type === "language" && isSelected && isActive && (
+            <Image
+              source={{ uri: imageAssets.circleClicked }}
+              alt="Clicked"
+              style={styles.selectedIcon}
+            />
+          )}
+        </TouchableOpacity>
+      );
+    });
+  };
+
+  return (
+    <View
+      className="verified-custd-mdl-startup-language-content-container"
+      style={styles.container}
+    >
+      <View className="verified-custd-mdl-st-language-content">
+        {props.headerText && (
+          <Text
+            className="verified-custd-mdl-st-language-text"
+            style={styles.headerText}
+          >
+            {props.headerText}
+          </Text>
+        )}
+
+        <View className="verified-custd-mdl-mobille-startup-search-box-container">
+          <View
+            className="verified-custd-mdl-mobile-startup-search-box"
+            style={styles.searchBox}
+          >
+            <Image
+              source={{ uri: imageAssets.search }}
+              alt="Search"
+              className="verified-custd-mdl-mobile-search-icon"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              placeholder="Search"
+              className="verified-custd-mdl-ms-search-box-content"
+              style={styles.input}
+              onChangeText={handleSearch}
+              onFocus={() => props.type === "language" && props.setSelected("")}
+            />
+          </View>
+
+          <ScrollView
+            className="verified-custd-mdl-mobile-startup-search-content"
+            style={{ maxHeight: props.contentMaxHeight || 300 }}
+          >
+            <View className="verified-custd-mdl-ms-search-content-container">
+              {(newSearchContent || props.searchContent)?.length > 0 &&
+                renderResults(newSearchContent || props.searchContent)}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// const styles = StyleSheet?.create({
+//   container: {
+//     padding: 8,
+//   },
+//   headerText: {
+//     fontSize: 14,
+//     marginBottom: 8,
+//   },
+//   searchBox: {
+//     flexDirection: "row",
+//     alignItems: "center",
+//     borderColor: "#CCC",
+//     borderWidth: 1,
+//     borderRadius: 6,
+//     padding: 6,
+//     marginBottom: 12,
+//   },
+//   searchIcon: {
+//     width: 18,
+//     height: 18,
+//     marginRight: 6,
+//   },
+//   input: {
+//     flex: 1,
+//     fontSize: 14,
+//     borderWidth: 0,
+//     outlineStyle: "none",
+//   },
+//   resultItem: {
+//     paddingVertical: 8,
+//     paddingHorizontal: 10,
+//     borderBottomWidth: 1,
+//     borderBottomColor: "#eee",
+//     flexDirection: "row",
+//     alignItems: "center",
+//     justifyContent: "space-between",
+//   },
+//   resultInner: {
+//     flexDirection: "row",
+//     alignItems: "center",
+//   },
+//   icon: {
+//     width: 20,
+//     height: 20,
+//     marginRight: 10,
+//   },
+//   resultText: {
+//     fontSize: 14,
+//     flexWrap: "wrap",
+//   },
+//   fadedText: {
+//     color: "#B6B7C3",
+//   },
+//   boldText: {
+//     color: "#000",
+//   },
+//   selectedIcon: {
+//     width: 16,
+//     height: 16,
+//   },
+// });
+
+export default SearchBox;

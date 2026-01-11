@@ -1,0 +1,2928 @@
+import React, { useEffect, useState } from "react";
+import { imageAssets, numberPositionsFmt } from "../utils/constants";
+import { useVaultStore } from "../services/store";
+import { completeVaultCreation } from "../services/contracts";
+import PageSlider from "../components/slider";
+import SearchBox from "../components/search";
+import { VerifiedCustodyHelpers } from "../utils/types";
+import {
+  hashTheString,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+} from "../utils/helpers";
+import { ethers } from "ethers";
+import { contractAddress, Provider } from "@verified-network/verified-sdk";
+import { ChainConfig } from "../utils/config";
+import Success from "../components/success";
+
+const AddCosignersPage = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+    rnPasskey: any;
+  };
+  fontsLoaded?: boolean;
+  setStep: (step: string) => void;
+  setIsLoading: (isLoading: boolean) => void;
+  userNumberFmt: string;
+  userEmail: string;
+  selectedCountry: { name: string; area: string; flag: string };
+  allCountries: any;
+  defaultCountry?: {
+    area: string;
+    flag: string;
+    name: string;
+  };
+  helperFunctions?: VerifiedCustodyHelpers;
+  enablePhone?: boolean;
+  action?: string;
+  setShowDashboard?: (showDashboard: boolean) => void;
+  setShowResetPin?: (showResetPin: boolean) => void;
+  setShowRemoveCosigner?: (showRemoveCosigner: boolean) => void;
+  dashbordElement?: React.ComponentType<{
+    setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  }>;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(
+    props.fontsLoaded || false
+  );
+  const [showLearnMore, setShowLearnMore] = useState<boolean>(false);
+  const [learnMoreStep, setLearnMoreStep] = useState<string>("1");
+  const [cosignerStep, setCosignerStep] = useState<string>("1");
+  const [showAddMore, setShowAddMore] = useState<boolean>(false);
+  const [addChannel, setAddChannel] = useState<string>("email");
+  const [coSignerNumber, setCoSignerNumber] = useState<string>("");
+  const [coSignerNumberFmt, setCoSignerNumberFmt] = useState<string>("");
+  const [coSignerEmail, setCoSignerEmail] = useState<string>("");
+  const [coSignerName, setCoSignerName] = useState<string>("");
+  const [userInput, setUserInput] = useState<string>("");
+  const [searchActive, setSearchActive] = useState<boolean>(false);
+  const [selectedCountry, setSelectedCountry] = useState(
+    props.defaultCountry || {
+      area: "1",
+      flag: imageAssets.usaFlag,
+      name: "United States",
+    }
+  );
+  const [coSigners, setCosigners] = useState([]);
+  const [existingCosignersNumber, setExistingCosignersNumber] = useState(0);
+  const [existingCosigners, setExistingCosigners] = useState([]);
+  const [remainingCosigners, setRemainingCosigners] = useState([]);
+  const [showSetRule, setShowSetRule] = useState<boolean>(false);
+  const [requiredSigners, setRequiredSigners] = useState<number>(2);
+  const [errorText, setErrorText] = useState<string>("");
+  const [showRemoveSuccess, setShowRemoveSuccess] = useState<boolean>(false);
+
+  const { pk, vaultData, vaultContract, chainId, signer } = useVaultStore();
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else {
+        //load fonts with expo-font for react native.
+        try {
+          const _ = await loadAllGoogleFontsRN(Font);
+          setFontsLoaded(true);
+        } catch (err) {
+          setFontsLoaded(false);
+        }
+      }
+    };
+    if (!props.fontsLoaded) {
+      PreloadGoogleFonts();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFetchUserCosigners = async () => {
+      if (props.setIsLoading) {
+        props.setIsLoading(true);
+      }
+      const hashedVaultId = hashTheString(
+        props.userEmail?.length > 0
+          ? props.userEmail
+          : `+${props.selectedCountry.area}${props.userNumberFmt?.replace(
+              " ",
+              ""
+            )}`
+      );
+      const quorumSet = await vaultContract.getQuorum(hashedVaultId);
+      if (quorumSet?.status === 0 && quorumSet?.response?.result?.length > 0) {
+        const cosignersNumber = Number(quorumSet?.response?.result[0]);
+        setExistingCosignersNumber(cosignersNumber);
+        setRemainingCosigners(new Array(cosignersNumber).fill(" "));
+      }
+      if (props.setIsLoading) {
+        props.setIsLoading(false);
+      }
+      if (vaultData?.existingCosignersHashed?.length > 0) {
+        setExistingCosigners([...new Set(vaultData?.existingCosignersHashed)]);
+        setRemainingCosigners([...new Set(vaultData?.existingCosignersHashed)]);
+        return;
+      }
+      const cntAddresses: any = contractAddress;
+      const custodyAddress = cntAddresses[chainId]?.Custody;
+      if (!custodyAddress) {
+        return;
+      }
+      const custodyEventAbi = [
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              name: "creator",
+              type: "bytes32",
+            },
+            {
+              indexed: false,
+              name: "participant",
+              type: "bytes32",
+            },
+          ],
+          name: "NewParticipant",
+          type: "event",
+        },
+      ];
+      const etherCustodyContract = new ethers.Contract(
+        custodyAddress,
+        custodyEventAbi,
+        signer
+      );
+      if (!etherCustodyContract) {
+        return;
+      }
+      const iface = new ethers.Interface(custodyEventAbi);
+      const eventFragment = iface.getEvent("NewParticipant");
+      const topicHash = eventFragment.topicHash;
+
+      const provider = new Provider(ChainConfig[chainId]?.rpcUrls[0]);
+
+      const logs = await provider?.getLogs({
+        address: custodyAddress,
+        fromBlock: ChainConfig[chainId]?.custodyContractBlock || 0,
+        toBlock: "latest",
+        topics: [topicHash],
+      });
+
+      const userParticipants = logs
+        ?.map((log: any) => {
+          const parsedLog = iface.parseLog(log);
+          if (
+            parsedLog?.args?.creator?.toLowerCase() ===
+              hashTheString(
+                props.userEmail?.length > 0
+                  ? props.userEmail
+                  : `+${
+                      props.selectedCountry.area
+                    }${props.userNumberFmt?.replace(" ", "")}`
+              ) &&
+            parsedLog?.args?.creator !== parsedLog?.args?.participant
+          )
+            return parsedLog?.args?.participant;
+          else return null;
+        })
+        ?.filter((participant: any) => participant !== null);
+
+      setExistingCosigners([...new Set(userParticipants)]);
+      setRemainingCosigners([...new Set(userParticipants)]);
+    };
+
+    if (
+      (props.userEmail?.length > 0 &&
+        props.action === "remove-cosigner" &&
+        signer &&
+        vaultContract) ||
+      (props.userNumberFmt?.length > 0 &&
+        props.action === "remove-cosigner" &&
+        signer &&
+        vaultContract)
+    ) {
+      handleFetchUserCosigners();
+    }
+  }, [
+    props.userEmail,
+    props.action,
+    props.userNumberFmt,
+    props.selectedCountry.area,
+  ]);
+
+  const handleButtonDisplay = () => {
+    // const button = document.getElementById("add-cosigner-button");
+    // if (button && coSigners?.length > 0) {
+    //   button.className = "startup-button-active";
+    // } else {
+    //   button!.className = "startup-button";
+    // }
+  };
+
+  const handleAddCoSigner = () => {
+    let coSignerLength = coSigners?.length;
+    if (addChannel === "sms" && coSignerNumber?.length === 0) {
+      setErrorText("Invalid input, please check the phone number");
+      return;
+    } else if (addChannel === "sms" && coSignerNumber?.length !== 10) {
+      setErrorText("Invalid input, please check the phone number");
+      return;
+    } else if (addChannel === "email" && coSignerEmail?.length === 0) {
+      setErrorText("Invalid input, please check the email");
+      return;
+    } else if (
+      addChannel === "email" &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(coSignerEmail)
+    ) {
+      setErrorText("Invalid input, please check the email");
+      return;
+    } else if (
+      coSigners?.find((sig) =>
+        sig?.otpChannel === "sms"
+          ? sig?.phoneArea?.toLowerCase() + sig?.number?.toLowerCase() ===
+            selectedCountry.area?.toLowerCase() +
+              coSignerNumberFmt?.toLowerCase()
+          : sig?.email?.toLowerCase() === coSignerEmail?.toLowerCase()
+      )
+    ) {
+      if (props.action !== "remove-cosigner") {
+        setErrorText(
+          addChannel === "sms"
+            ? "Invalid input, phone number is already a co-signer"
+            : "Invalid input, email is already a co-signer"
+        );
+      }
+      if (props.action === "remove-cosigner") {
+        setErrorText(
+          addChannel === "sms"
+            ? "Invalid input, phone number is already added to list of co-signers to remove"
+            : "Invalid input, email is already added to list of co-signers to remove"
+        );
+      }
+      return;
+    } else if (
+      addChannel === "sms" &&
+      selectedCountry?.area?.toLowerCase() +
+        coSignerNumberFmt?.toLowerCase() ===
+        props.selectedCountry.area?.toLowerCase() +
+          props.userNumberFmt?.toLowerCase()
+    ) {
+      setErrorText("Invalid input, phone number is creator's phone number");
+      return;
+    } else if (
+      addChannel === "email" &&
+      coSignerEmail?.toLowerCase() === props.userEmail?.toLowerCase()
+    ) {
+      setErrorText("Invalid input, email is creator's email");
+      return;
+    } else if (
+      props.action === "remove-cosigner" &&
+      existingCosigners?.length === 0
+    ) {
+      setErrorText(
+        "Error while fetching your existing cosigners. Try again later"
+      );
+      return;
+    } else if (
+      props.action === "remove-cosigner" &&
+      !existingCosigners?.includes(
+        hashTheString(
+          addChannel === "sms"
+            ? `+${selectedCountry?.area}${coSignerNumber}`
+            : coSignerEmail
+        )
+      )
+    ) {
+      setErrorText(
+        addChannel === "sms"
+          ? "Invalid input, phone number entered is not a valid co-signer of your account."
+          : "Invalid input, email entered is not a valid co-signer of your account."
+      );
+      return;
+    } else if (
+      props.action === "remove-cosigner" &&
+      remainingCosigners?.length === 1
+    ) {
+      setErrorText(
+        "You have only 1 co-signer left, at least one(1) co-signer is required."
+      );
+      return;
+    } else if (coSignerLength + 1 === 5) {
+      setErrorText(
+        "You cannot add more than 5 Co-signers to your account. You can delete existing cosigner and add new one."
+      );
+      return;
+    }
+    setErrorText("");
+
+    setCosigners((cngs) => [
+      {
+        name: coSignerName,
+        email: coSignerEmail,
+        number: coSignerNumberFmt,
+        phoneNumber: `+${selectedCountry?.area}${coSignerNumber}`,
+        otpChannel: addChannel,
+        phoneArea: selectedCountry?.area,
+        position: cngs?.length + 1,
+        vaultId:
+          addChannel === "sms"
+            ? `+${selectedCountry?.area}${coSignerNumber}`
+            : coSignerEmail,
+      },
+      ...cngs,
+    ]);
+    setCoSignerEmail("");
+    setCoSignerName("");
+    setCoSignerNumber("");
+    setCoSignerNumberFmt("");
+    setUserInput("");
+    if (coSignerLength + 1 === 4) {
+      setShowAddMore(false);
+    }
+    if (props.action === "remove-cosigner" && remainingCosigners?.length > 1) {
+      setRemainingCosigners(
+        remainingCosigners?.filter(
+          (sig) =>
+            sig !==
+            hashTheString(
+              addChannel === "sms"
+                ? `+${selectedCountry?.area}${coSignerNumber}`
+                : coSignerEmail
+            )
+        )
+      );
+    }
+  };
+
+  const handleCompleteVault = async () => {
+    const keyHolders =
+      props.action !== "remove-cosigner"
+        ? [
+            {
+              otpChannel: props?.userEmail?.length > 0 ? "email" : "sms",
+              email: props?.userEmail,
+              phoneNumber: `+${
+                props?.selectedCountry?.area
+              }${props?.userNumberFmt?.replace(" ", "")}`,
+              vaultId: vaultData?.vaultId,
+            },
+            ...coSigners,
+          ]
+        : [vaultData?.hashedVaultId, ...remainingCosigners];
+
+    if (
+      (props.action !== "remove-cosigner" &&
+        keyHolders?.length > 0 &&
+        coSigners?.length > 0 &&
+        requiredSigners &&
+        vaultData?.vaultId &&
+        vaultData?.hashedVaultId &&
+        vaultContract &&
+        pk &&
+        props.helperFunctions?.sendCoSignerInvitation &&
+        props.helperFunctions?.sendCreatorConfirmation) ||
+      (props.action === "remove-cosigner" &&
+        keyHolders?.length > 1 &&
+        requiredSigners &&
+        vaultData?.vaultId &&
+        vaultData?.hashedVaultId &&
+        vaultContract &&
+        pk &&
+        props.helperFunctions?.sendCoSignerInvitation &&
+        props.helperFunctions?.sendCreatorConfirmation)
+    ) {
+      props.setIsLoading(true);
+      await completeVaultCreation(
+        props.helperFunctions.sendCoSignerInvitation,
+        props.helperFunctions.sendCreatorConfirmation,
+        keyHolders,
+        coSigners,
+        props?.userEmail?.length > 0 ? "email" : "sms",
+        requiredSigners,
+        vaultData.vaultId,
+        vaultData.hashedVaultId,
+        vaultData.vaultPin,
+        vaultData.hashedVaultPin,
+        vaultContract,
+        pk,
+        vaultData?.rawId,
+        props.action
+      ).then((res) => {
+        props.setIsLoading(false);
+        if (res) {
+          props.action === "remove-cosigner"
+            ? setShowRemoveSuccess(true)
+            : props.setStep("7");
+        }
+      });
+    }
+  };
+
+  return (
+    <View
+      style={
+        isReactNative
+          ? { ...styles.verifiedCustdMdlStartupLanguage, padding: "0" }
+          : { padding: "0" }
+      }
+      className="verified-custd-mdl-startup-language"
+    >
+      {fontsLoaded && !showRemoveSuccess && (
+        <React.Fragment>
+          {!showLearnMore && (
+            <React.Fragment>
+              {cosignerStep === "1" && (
+                <React.Fragment>
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContact }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact"
+                  >
+                    <PageSlider
+                      platform={props.platform}
+                      sliderCount={[1, 2, 3]}
+                      currentSlider="2"
+                    />
+                    <View
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStartupContactContent }
+                          : {}
+                      }
+                      className="verified-custd-mdl-startup-contact-content"
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupContactText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-contact-text"
+                      >
+                        {props.action === "remove-cosigner"
+                          ? "You can remove an existing Co-signer"
+                          : " We require you to add at least another Co-Signer."}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Image
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerBodyIcon }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-body-icon"
+                    source={{ uri: imageAssets.addCoSignerIcon1 }}
+                    alt=""
+                  />
+
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerBody }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-body"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerBodyTextCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-body-text-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerBodyTextIcon,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-body-text-icon"
+                      >
+                        <Image
+                          source={{ uri: imageAssets.pkicon }}
+                          alt="icon"
+                        />
+                      </View>
+                      <Text
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-body-text-label"
+                      >
+                        This is a blockchain based platform where{" "}
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                        >
+                          we do not store password keys.
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerBodyTextCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-body-text-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerBodyTextIcon,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-body-text-icon"
+                      >
+                        <Image
+                          source={{ uri: imageAssets.encryptedIcon }}
+                          alt="icon"
+                        />
+                      </View>
+                      <Text
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-body-text-label"
+                      >
+                        Don’t worry, the{" "}
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                        >
+                          Co-Signer does not get access
+                        </Text>{" "}
+                        to your account in any way.
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerBodyTextCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-body-text-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerBodyTextIcon,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-body-text-icon"
+                      >
+                        <Image
+                          source={{ uri: imageAssets.supervise }}
+                          alt="icon"
+                        />
+                      </View>
+                      {props.action !== "remove-cosigner" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-body-text-label"
+                        >
+                          You can{" "}
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                          >
+                            be your own Co-Signer
+                          </Text>{" "}
+                          by adding a different contact number or Email ID. to
+                          your account in any way.
+                        </Text>
+                      )}
+
+                      {props.action === "remove-cosigner" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-body-text-label"
+                        >
+                          You may remove an existing Co-signer; however{" "}
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                          >
+                            at least one (1) Co-signer must remain
+                          </Text>{" "}
+                          on the account. You can manage your account’s
+                          Co-signers on the next page.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerButtonsCont }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-buttons-cont"
+                  >
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonNeut,
+                              border: "1px solid #0C0C0E",
+                              color: "#0C0C0E",
+                            }
+                          : {
+                              border: "1px solid #0C0C0E",
+                              color: "#0C0C0E",
+                            }
+                      }
+                      onPress={() => {
+                        setLearnMoreStep("1");
+                        setShowLearnMore(true);
+                      }}
+                      className="verified-custd-mdl-add-cosigner-button-neut"
+                    >
+                      <Text>Learn More</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                              width: "50%",
+                            }
+                          : {
+                              width: "50%",
+                            }
+                      }
+                      onPress={() => {
+                        setCosignerStep("2");
+                        setShowAddMore(false);
+                        setShowLearnMore(false);
+                      }}
+                      className="verified-custd-mdl-add-cosigner-button-action"
+                    >
+                      <Text>
+                        {props.action === "remove-cosigner"
+                          ? "Manage Signers"
+                          : "Add Co-Signer"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </React.Fragment>
+              )}
+
+              {cosignerStep === "2" && (
+                <React.Fragment>
+                  {" "}
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContact }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact"
+                  >
+                    <PageSlider
+                      platform={props.platform}
+                      sliderCount={[1, 2, 3]}
+                      currentSlider="2"
+                    />
+
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlStartupContactContent,
+                              gap: 16,
+                            }
+                          : { gap: 16 }
+                      }
+                      className="verified-custd-mdl-startup-contact-content"
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupContactText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-contact-text"
+                      >
+                        {props.action === "remove-cosigner"
+                          ? "Remove your Co-signers"
+                          : "Add your Co-Signers"}
+                      </Text>
+
+                      <View
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupOtpText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-otp-text"
+                      >
+                        {!showSetRule && (
+                          <React.Fragment>
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerHeaderText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-header-text"
+                            >
+                              {props.action === "remove-cosigner"
+                                ? "Input phone number/an Email ID of the Co-Signer you want to remove"
+                                : "Add a phone number/an Email ID of Co-Signer to send them a request."}
+                            </Text>
+
+                            {props.action === "remove-cosigner" && (
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerHeaderText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-header-text"
+                              >
+                                You Signing rule is{" "}
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerHeaderInfoTextBold,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-header-info-text-bold"
+                                >
+                                  {existingCosignersNumber} required signers
+                                </Text>
+                              </Text>
+                            )}
+                          </React.Fragment>
+                        )}
+
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerHeaderInfoCont,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-header-info-cont"
+                        >
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerHeaderInfoText,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-header-info-text"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerHeaderInfoTextBold,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-header-info-text-bold"
+                            >
+                              NOTE:
+                            </Text>{" "}
+                            {props.action === "remove-cosigner"
+                              ? "You cannot remove all Co-signers at least one(1) must remain, This is to ensure your account is secured."
+                              : "You can add yourself as a Co-Signer and further add more Co-Signers to your account."}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerStep2Body }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-step2-body"
+                  >
+                    {props.action === "remove-cosigner" && (
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-step2-body-content-header-cont"
+                      >
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderBody,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-step2-body-content-header-body"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabel,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-body-content-header-label"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabelText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-body-content-header-label-text"
+                            >
+                              Creator
+                            </Text>
+                          </View>
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeaderCont,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-a-c-2-b-content-header-body-header-cont"
+                          >
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeader,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-a-c-2-b-content-header-body-header"
+                            >
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAC2BContentHeaderBodyTitle,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-a-c-2-b-content-header-body-title"
+                              >
+                                You
+                              </Text>
+
+                              {props.userEmail?.length > 0 && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                >
+                                  {props.userEmail}
+                                </Text>
+                              )}
+                              {props.userEmail?.length === 0 && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                >
+                                  (+{props.selectedCountry.area}){" "}
+                                  {props.userNumberFmt}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerStep2BodyHeader,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-step2-body-header"
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerStep2BodyHeaderFirstText,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-step2-body-header-first-text"
+                      >
+                        {props.action === "remove-cosigner"
+                          ? "Remove Co-signers"
+                          : "Add Co-Signers"}
+                      </Text>
+
+                      {props.action !== "remove-cosigner" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerStep2BodyHeaderSecondText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-step2-body-header-second-text"
+                        >
+                          (
+                          {coSigners?.length + 1 < 5
+                            ? coSigners?.length + 1
+                            : 5}
+                          /5)
+                        </Text>
+                      )}
+                      {props.action === "remove-cosigner" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerStep2BodyHeaderSecondText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-step2-body-header-second-text"
+                        >
+                          ({coSigners?.length}
+                          /5)
+                        </Text>
+                      )}
+                    </View>
+
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerStep2BodyContent,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-step2-body-content"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeader,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-step2-body-content-header"
+                      >
+                        {props.action === "remove-cosigner" &&
+                          remainingCosigners?.includes(" ") && (
+                            <Text
+                              style={
+                                isReactNative
+                                  ? { ...styles.verifiedCustdMdlOtpResendText }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-otp-resend-text"
+                            >
+                              Fetching previous Co-signers...
+                            </Text>
+                          )}
+                        {props.action !== "remove-cosigner" && (
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderCont,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-body-content-header-cont"
+                          >
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderBody,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-body-content-header-body"
+                            >
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabel,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-body-content-header-label"
+                              >
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabelText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-step2-body-content-header-label-text"
+                                >
+                                  Creator
+                                </Text>
+                              </View>
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeaderCont,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-a-c-2-b-content-header-body-header-cont"
+                              >
+                                <View
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeader,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-a-c-2-b-content-header-body-header"
+                                >
+                                  <Text
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAC2BContentHeaderBodyTitle,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-a-c-2-b-content-header-body-title"
+                                  >
+                                    You
+                                  </Text>
+
+                                  {props.userEmail?.length > 0 && (
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                    >
+                                      {props.userEmail}
+                                    </Text>
+                                  )}
+                                  {props.userEmail?.length === 0 && (
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                    >
+                                      (+{props.selectedCountry.area}){" "}
+                                      {props.userNumberFmt}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+
+                              {/* <TouchableOpacity className="verified-custd-mdl-a-c-2-b-content-header-body-button">
+            <Text>Add Self</Text>
+          </TouchableOpacity> */}
+                            </View>
+                          </View>
+                        )}
+
+                        {!showSetRule &&
+                          coSigners
+                            .sort((a, b) => a?.position - b?.position)
+                            .map((cng, idx) => (
+                              <View
+                                key={idx}
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderCont,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-body-content-header-cont"
+                              >
+                                <View
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderBody,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-step2-body-content-header-body"
+                                >
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabel,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-add-cosigner-step2-body-content-header-label"
+                                  >
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabelText,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-add-cosigner-step2-body-content-header-label-text"
+                                    >
+                                      {
+                                        numberPositionsFmt[
+                                          cng?.position
+                                        ]?.split(" ")[0]
+                                      }
+                                      <Text>
+                                        <Text style={{ fontSize: 10 }}>
+                                          {/* sup replacement */}
+                                          {
+                                            numberPositionsFmt[
+                                              cng?.position
+                                            ]?.split(" ")[1]
+                                          }
+                                        </Text>
+                                      </Text>{" "}
+                                      Co-Signer{" "}
+                                      {props.action === "remove-cosigner"
+                                        ? "To Remove"
+                                        : ""}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeaderCont,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-a-c-2-b-content-header-body-header-cont"
+                                  >
+                                    <View
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeader,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-a-c-2-b-content-header-body-header"
+                                    >
+                                      <Text
+                                        style={
+                                          isReactNative
+                                            ? {
+                                                ...styles.verifiedCustdMdlAC2BContentHeaderBodyTitle,
+                                              }
+                                            : {}
+                                        }
+                                        className="verified-custd-mdl-a-c-2-b-content-header-body-title"
+                                      >
+                                        {cng?.name}
+                                      </Text>
+
+                                      {cng.otpChannel === "email" && (
+                                        <Text
+                                          style={
+                                            isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                                }
+                                              : {}
+                                          }
+                                          className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                        >
+                                          {cng.email}
+                                        </Text>
+                                      )}
+                                      {cng.otpChannel === "sms" && (
+                                        <Text
+                                          style={
+                                            isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAC2BContentHeaderBodyLabel,
+                                                }
+                                              : {}
+                                          }
+                                          className="verified-custd-mdl-a-c-2-b-content-header-body-label"
+                                        >
+                                          (+{cng?.phoneArea}) {cng.number}
+                                        </Text>
+                                      )}
+                                    </View>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAC2BContentHeaderBodyHeaderIcons,
+                                            flexDirection: "row",
+                                          }
+                                        : { flexDirection: "row" }
+                                    }
+                                    className="verified-custd-mdl-a-c-2-b-content-header-body-header-icons"
+                                  >
+                                    {/* <TouchableOpacity
+                                  style={{ background: "transparent" }}
+                                >
+                                  <Image
+                                    style={{
+                                      cursor: "pointer",
+                                      width: 24,
+                                      height: 24,
+                                    }}
+                                    source={{ uri: imageAssets.editBlack }}
+                                  />
+                                </TouchableOpacity> */}
+
+                                    <TouchableOpacity
+                                      style={{
+                                        background: "transparent",
+                                        width: 24,
+                                        height: 24,
+                                      }}
+                                      onPress={() => {
+                                        setCosigners((cngs) =>
+                                          cngs
+                                            ?.filter((sig) =>
+                                              sig?.otpChannel === "sms"
+                                                ? sig?.phoneArea?.toLowerCase() +
+                                                    sig?.number?.toLowerCase() !==
+                                                  cng?.phoneArea?.toLowerCase() +
+                                                    cng?.number?.toLowerCase()
+                                                : sig?.email?.toLowerCase() !==
+                                                  cng?.email?.toLowerCase()
+                                            )
+                                            ?.map((nSig, newId) => {
+                                              nSig.position = newId + 1;
+                                              return nSig;
+                                            })
+                                        );
+                                        handleButtonDisplay();
+                                      }}
+                                    >
+                                      <Image
+                                        style={{
+                                          cursor: "pointer",
+                                          width: 24,
+                                          height: 24,
+                                        }}
+                                        source={{ uri: imageAssets.delete }}
+                                      />
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              </View>
+                            ))}
+                      </View>
+
+                      {showSetRule && (
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyContentOutter,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-confirm-body-content-outter"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerConfirmBodyContent,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-confirm-body-content"
+                          >
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyCont,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-confirm-body-cont"
+                            >
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerConfirmBodyHeader,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-confirm-body-header"
+                              >
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerConfirmBodyTitle,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-confirm-body-title"
+                                >
+                                  Specify the number of Co-Signers you need to
+                                  sign off for an approval
+                                </Text>
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerConfirmBodyLabel,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-confirm-body-label"
+                                >
+                                  By default we need 2, you can add up to 5
+                                  Co-Signers as minimum sign off needed for
+                                  approval.
+                                </Text>
+                              </View>
+
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooter,
+                                        width: "100%",
+                                      }
+                                    : { width: "100%" }
+                                }
+                                className="verified-custd-mdl-add-cosigner-confirm-body-footer"
+                              >
+                                <View
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterIndCont,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-confirm-body-footer-ind-cont"
+                                >
+                                  {new Array(
+                                    props.action === "remove-cosigner"
+                                      ? remainingCosigners?.length + 1
+                                      : coSigners?.length + 1
+                                  )
+                                    .fill("1")
+                                    .map((_, idx) => (
+                                      <View
+                                        key={idx}
+                                        className="verified-custd-mdl-add-cosigner-confirm-body-footer-ind"
+                                        style={
+                                          idx + 1 === requiredSigners &&
+                                          isReactNative
+                                            ? {
+                                                ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterInd,
+                                              }
+                                            : idx + 1 === requiredSigners &&
+                                              !isReactNative
+                                            ? {}
+                                            : isReactNative
+                                            ? {
+                                                ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterInd,
+                                                height: 0,
+                                                width: 0,
+                                                overflow: "hidden",
+                                              }
+                                            : {
+                                                height: 0,
+                                                width: 0,
+                                                overflow: "hidden",
+                                              }
+                                        }
+                                      >
+                                        <View
+                                          style={
+                                            isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterIndTextCont,
+                                                }
+                                              : {}
+                                          }
+                                          className="verified-custd-mdl-add-cosigner-confirm-body-footer-ind-text-cont"
+                                        >
+                                          <Text
+                                            style={
+                                              isReactNative
+                                                ? {
+                                                    ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterIndText,
+                                                  }
+                                                : {}
+                                            }
+                                            className="verified-custd-mdl-add-cosigner-confirm-body-footer-ind-text"
+                                          >
+                                            {String(idx + 1)}
+                                          </Text>
+                                        </View>
+                                        <Image
+                                          style={
+                                            isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterIndIcon,
+                                                }
+                                              : {}
+                                          }
+                                          className="verified-custd-mdl-add-cosigner-confirm-body-footer-ind-icon"
+                                          source={{ uri: imageAssets.pointer }}
+                                        />
+                                      </View>
+                                    ))}
+                                </View>
+
+                                <View
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelCont,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-cont"
+                                >
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderCont,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider-cont"
+                                  >
+                                    <View
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSlider,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider"
+                                    >
+                                      {props.action !== "remove-cosigner" && (
+                                        <View
+                                          style={
+                                            isReactNative &&
+                                            coSigners?.length === 1
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderInd,
+                                                  width: `${
+                                                    100 / coSigners?.length
+                                                  }%`,
+                                                }
+                                              : !isReactNative &&
+                                                coSigners?.length === 1
+                                              ? {
+                                                  width: `${
+                                                    100 / coSigners?.length
+                                                  }%`,
+                                                }
+                                              : isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderInd,
+                                                  width: `${
+                                                    100 / coSigners?.length + 5
+                                                  }%`,
+                                                }
+                                              : {
+                                                  width: `calc(${
+                                                    100 / coSigners?.length
+                                                  }% + 12px)`,
+                                                }
+                                          }
+                                          className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider-ind"
+                                        >
+                                          <Image
+                                            style={
+                                              isReactNative
+                                                ? {
+                                                    ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderIcon,
+                                                  }
+                                                : {}
+                                            }
+                                            className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider-icon"
+                                            source={{
+                                              uri: imageAssets.sliderDot,
+                                            }}
+                                          />
+                                        </View>
+                                      )}
+                                      {props.action === "remove-cosigner" && (
+                                        <View
+                                          style={
+                                            isReactNative &&
+                                            remainingCosigners?.length === 1
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderInd,
+                                                  width: `${
+                                                    100 /
+                                                    remainingCosigners?.length
+                                                  }%`,
+                                                }
+                                              : !isReactNative &&
+                                                remainingCosigners?.length === 1
+                                              ? {
+                                                  width: `${
+                                                    100 /
+                                                    remainingCosigners?.length
+                                                  }%`,
+                                                }
+                                              : isReactNative
+                                              ? {
+                                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderInd,
+                                                  width: `${
+                                                    100 /
+                                                      remainingCosigners?.length +
+                                                    5
+                                                  }%`,
+                                                }
+                                              : {
+                                                  width: `calc(${
+                                                    100 /
+                                                    remainingCosigners?.length
+                                                  }% + 12px)`,
+                                                }
+                                          }
+                                          className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider-ind"
+                                        >
+                                          <Image
+                                            style={
+                                              isReactNative
+                                                ? {
+                                                    ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderIcon,
+                                                  }
+                                                : {}
+                                            }
+                                            className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-slider-icon"
+                                            source={{
+                                              uri: imageAssets.sliderDot,
+                                            }}
+                                          />
+                                        </View>
+                                      )}
+                                    </View>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelTextCont,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-text-cont"
+                                  >
+                                    {new Array(
+                                      props.action === "remove-cosigner"
+                                        ? remainingCosigners?.length + 1
+                                        : coSigners?.length + 1
+                                    )
+                                      .fill("1")
+                                      .map((_, idx) => (
+                                        <TouchableOpacity
+                                          style={{ background: "transparent" }}
+                                          key={idx}
+                                          onPress={() => {
+                                            if (idx + 1 > 1) {
+                                              setRequiredSigners(idx + 1);
+                                            }
+                                          }}
+                                        >
+                                          {props.action !==
+                                            "remove-cosigner" && (
+                                            <Text
+                                              style={
+                                                isReactNative &&
+                                                idx === coSigners?.length
+                                                  ? {
+                                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelText,
+                                                      paddingRight: 12,
+                                                    }
+                                                  : isReactNative && idx === 0
+                                                  ? {
+                                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelText,
+                                                      paddingLeft: 12,
+                                                    }
+                                                  : !isReactNative && idx === 0
+                                                  ? { paddingLeft: 12 }
+                                                  : !isReactNative &&
+                                                    idx === coSigners?.length
+                                                  ? { paddingRight: 12 }
+                                                  : {}
+                                              }
+                                              className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-text"
+                                            >
+                                              {String(idx + 1)}
+                                            </Text>
+                                          )}
+
+                                          {props.action ===
+                                            "remove-cosigner" && (
+                                            <Text
+                                              style={
+                                                isReactNative &&
+                                                idx ===
+                                                  remainingCosigners?.length
+                                                  ? {
+                                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelText,
+                                                      paddingRight: 12,
+                                                    }
+                                                  : isReactNative && idx === 0
+                                                  ? {
+                                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyFooterLabelText,
+                                                      paddingLeft: 12,
+                                                    }
+                                                  : !isReactNative && idx === 0
+                                                  ? { paddingLeft: 12 }
+                                                  : !isReactNative &&
+                                                    idx ===
+                                                      remainingCosigners?.length
+                                                  ? { paddingRight: 12 }
+                                                  : {}
+                                              }
+                                              className="verified-custd-mdl-add-cosigner-confirm-body-footer-label-text"
+                                            >
+                                              {String(idx + 1)}
+                                            </Text>
+                                          )}
+                                        </TouchableOpacity>
+                                      ))}
+                                  </View>
+                                </View>
+                              </View>
+
+                              <TouchableOpacity
+                                id="confirm-cosigner-button"
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupButtonActive,
+                                        marginBottom: 10,
+                                        width: "100%",
+                                      }
+                                    : { marginBottom: 10, width: "100%" }
+                                }
+                                className="verified-custd-mdl-startup-button-active"
+                                onPress={async () => {
+                                  await handleCompleteVault();
+                                }}
+                              >
+                                <Text>Confirm</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      {showAddMore && coSigners?.length < 4 && (
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerStep2AddMoreBody,
+                                  width: "90%",
+                                }
+                              : { width: "90%" }
+                          }
+                          className="verified-custd-mdl-add-cosigner-step2-add-more-body"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2AddMoreFirst,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-add-more-first"
+                          >
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreFirstHeader,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-first-header"
+                            >
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2AddMoreFirstHeaderText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-add-more-first-header-text"
+                              >
+                                Add Details
+                              </Text>
+                            </View>
+
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreFirstFooter,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-first-footer"
+                            >
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2AddMoreFirstFooterText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-add-more-first-footer-text"
+                              >
+                                {
+                                  numberPositionsFmt[
+                                    coSigners?.length + 1
+                                  ]?.split(" ")[0]
+                                }
+                                <Text style={{ fontSize: 10 }}>
+                                  {
+                                    numberPositionsFmt[
+                                      coSigners?.length + 1
+                                    ]?.split(" ")[1]
+                                  }
+                                </Text>{" "}
+                                Co-Signer{" "}
+                                {props.action === "remove-cosigner"
+                                  ? "To Remove"
+                                  : ""}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {props.action !== "remove-cosigner" && (
+                            <View
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreSecond,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-second"
+                            >
+                              <TextInput
+                                onChangeText={setCoSignerName}
+                                value={coSignerName}
+                                placeholder="Enter Co-signer name"
+                                placeholderTextColor="#B6B7C3"
+                                className="verified-custd-mdl-add-cosigner-step2-add-more-second-input"
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2AddMoreSecondInput,
+                                      }
+                                    : {}
+                                }
+                              />
+                            </View>
+                          )}
+
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThird,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-add-more-third"
+                          >
+                            {props.enablePhone && (
+                              <TouchableOpacity
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThirdCont,
+                                        background: "transparent",
+                                        width: 24,
+                                        height: 24,
+                                      }
+                                    : { background: "transparent" }
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-add-more-third-cont"
+                                onPress={() => {
+                                  setAddChannel("sms");
+                                  setErrorText("");
+                                  setCoSignerEmail("");
+                                }}
+                              >
+                                <Image
+                                  source={{
+                                    uri:
+                                      addChannel === "sms"
+                                        ? imageAssets.selectClicked
+                                        : imageAssets.select,
+                                  }}
+                                  style={{ width: 24, height: 24 }}
+                                />
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThirdContText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-add-cosigner-step2-add-more-third-cont-text"
+                                >
+                                  Phone number
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+
+                            <TouchableOpacity
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThirdCont,
+                                      background: "transparent",
+                                      width: 24,
+                                      height: 24,
+                                    }
+                                  : { background: "transparent" }
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-third-cont"
+                              onPress={() => {
+                                setAddChannel("email");
+                                setErrorText("");
+                                setCoSignerNumber("");
+                                setCoSignerNumberFmt("");
+                                setUserInput("");
+                              }}
+                            >
+                              <Image
+                                source={{
+                                  uri:
+                                    addChannel === "email"
+                                      ? imageAssets.selectClicked
+                                      : imageAssets.select,
+                                }}
+                                style={{ width: 24, height: 24 }}
+                              />
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThirdContText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-add-cosigner-step2-add-more-third-cont-text"
+                              >
+                                Email
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2AddMoreThird,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-add-more-third"
+                          >
+                            {addChannel === "sms" && (
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStContactInput,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-st-contact-input"
+                              >
+                                <View
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlStContactContentContainer,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-st-contact-content-container"
+                                >
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      setSearchActive(!searchActive)
+                                    }
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlStContactFirstSection,
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                          }
+                                        : {
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                          }
+                                    }
+                                    className="verified-custd-mdl-st-contact-first-section"
+                                  >
+                                    <Image
+                                      source={{ uri: selectedCountry.flag }}
+                                      style={{ width: 24, height: 16 }}
+                                      alt="Country Flag"
+                                    />
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlStContactSelectionText,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-st-contact-selection-text"
+                                    >
+                                      + {selectedCountry.area}
+                                    </Text>
+
+                                    {searchActive ? (
+                                      <Image
+                                        source={{ uri: imageAssets.arrowUp }}
+                                        style={{ width: 16, height: 16 }}
+                                        alt="Dropdown Icon"
+                                      />
+                                    ) : (
+                                      <Image
+                                        source={{ uri: imageAssets.arrowDown }}
+                                        style={{ width: 16, height: 16 }}
+                                        alt="Dropdown Icon"
+                                      />
+                                    )}
+                                  </TouchableOpacity>
+
+                                  <TextInput
+                                    onChangeText={(text) => {
+                                      if (text === "") {
+                                        setUserInput(userInput + " ");
+                                      } else {
+                                        setUserInput(text);
+                                      }
+                                      const numericInput = text.replace(
+                                        /\D/g,
+                                        ""
+                                      );
+                                      setCoSignerNumber(numericInput);
+                                      let formattedNumber = "";
+                                      for (
+                                        let i = 0;
+                                        i < numericInput.length;
+                                        i++
+                                      ) {
+                                        formattedNumber += numericInput[i];
+                                        if (
+                                          (i + 1) % 5 === 0 &&
+                                          i + 1 < numericInput.length
+                                        ) {
+                                          formattedNumber += " ";
+                                        }
+                                      }
+                                      setCoSignerNumberFmt(formattedNumber);
+                                      setErrorText("");
+                                    }}
+                                    onBlur={handleButtonDisplay}
+                                    value={coSignerNumberFmt}
+                                    placeholder="Enter phone number"
+                                    placeholderTextColor="#b6b7c3"
+                                    keyboardType="phone-pad"
+                                    className="verified-custd-mdl-st-contact-second-section"
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlStContactSecondSection,
+                                          }
+                                        : {}
+                                    }
+                                  />
+                                </View>
+
+                                {searchActive && (
+                                  <SearchBox
+                                    platform={props.platform}
+                                    pageName="ftu/contact"
+                                    searchContent={props.allCountries}
+                                    type="area-code"
+                                    handleButtonDisplay={handleButtonDisplay}
+                                    setSelected={setSelectedCountry}
+                                    selected={selectedCountry}
+                                    searchActive={searchActive}
+                                    setSearchActive={setSearchActive}
+                                    contentMaxHeight={300}
+                                    contentbottomMargin={300}
+                                  />
+                                )}
+
+                                {errorText === "" &&
+                                  coSignerNumber.length !== 10 &&
+                                  userInput.length > 10 && (
+                                    <View
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlStContactInputError,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-st-contact-input-error"
+                                    >
+                                      <Text
+                                        style={
+                                          isReactNative
+                                            ? {
+                                                ...styles.verifiedCustdMdlInputErrorText,
+                                              }
+                                            : {}
+                                        }
+                                        className="verified-custd-mdl-input-error-text"
+                                      >
+                                        Invalid input, please check the phone
+                                        number
+                                      </Text>
+                                    </View>
+                                  )}
+
+                                {errorText !== "" && (
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlStContactInputError,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-st-contact-input-error"
+                                  >
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlInputErrorText,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-input-error-text"
+                                    >
+                                      {errorText}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+
+                            {addChannel === "email" && (
+                              <View
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStContactInput,
+                                        width: "100%",
+                                      }
+                                    : { width: "100%" }
+                                }
+                                className="verified-custd-mdl-st-contact-input"
+                              >
+                                <TextInput
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlStContactSecondSection,
+                                          width: "100%",
+                                        }
+                                      : { width: "100%" }
+                                  }
+                                  onChangeText={(text: string) => {
+                                    setCoSignerEmail(text);
+                                    setErrorText("");
+                                  }}
+                                  onBlur={handleButtonDisplay}
+                                  value={coSignerEmail}
+                                  placeholder="Enter email"
+                                  placeholderTextColor="#b6b7c3"
+                                  keyboardType="email-address"
+                                  autoCapitalize="none"
+                                  className="verified-custd-mdl-st-contact-second-section"
+                                />
+                                {errorText !== "" && (
+                                  <View
+                                    style={
+                                      isReactNative
+                                        ? {
+                                            ...styles.verifiedCustdMdlStContactInputError,
+                                          }
+                                        : {}
+                                    }
+                                    className="verified-custd-mdl-st-contact-input-error"
+                                  >
+                                    <Text
+                                      style={
+                                        isReactNative
+                                          ? {
+                                              ...styles.verifiedCustdMdlInputErrorText,
+                                            }
+                                          : {}
+                                      }
+                                      className="verified-custd-mdl-input-error-text"
+                                    >
+                                      {errorText}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+                          </View>
+
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2AddMoreButtons,
+                                    flexDirection: "row",
+                                    justifyContent: "space-between",
+                                  }
+                                : {
+                                    flexDirection: "row",
+                                    justifyContent: "space-between",
+                                  }
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-add-more-buttons"
+                          >
+                            <TouchableOpacity
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreButtonsNeut,
+                                      flex: 1,
+                                      marginRight: 8,
+                                      border: "1px solid #603FF4",
+                                      color: "#603FF4",
+                                    }
+                                  : {
+                                      flex: 1,
+                                      marginRight: 8,
+                                      border:
+                                        "1px solid var(--secondary-electric-violet-600, #603FF4)",
+                                      color:
+                                        "var(--secondary-electric-violet-600, #603FF4)",
+                                    }
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-buttons-neut"
+                              onPress={() => setShowAddMore(false)}
+                            >
+                              <Text>Cancel</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2AddMoreButtonsAction,
+                                      flex: 1,
+                                      marginLeft: 8,
+                                    }
+                                  : { flex: 1, marginLeft: 8 }
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-add-more-buttons-action"
+                              onPress={() => {
+                                handleAddCoSigner();
+                                handleButtonDisplay();
+                              }}
+                            >
+                              <Text>Add</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      {!showAddMore &&
+                        !showSetRule &&
+                        coSigners?.length < 4 && (
+                          <TouchableOpacity
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2BodyContentFooter,
+                                    background: "transparent",
+                                    width: 20,
+                                    height: 20,
+                                  }
+                                : { background: "transparent" }
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-body-content-footer"
+                            onPress={() => setShowAddMore(true)}
+                          >
+                            <Image
+                              source={{ uri: imageAssets.addIcon }}
+                              style={{ width: 20, height: 20 }}
+                            />
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2BodyContentFooterText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-body-content-footer-text"
+                            >
+                              {" "}
+                              {props.action === "remove-cosigner"
+                                ? " Add Co-Signer to remove"
+                                : " Add another Co-Signer"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+
+                      {!showAddMore &&
+                        !showSetRule &&
+                        coSigners?.length === 4 && (
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerStep2BodyContentFooterDis,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-step2-body-content-footer-dis"
+                          >
+                            <Image
+                              source={{ uri: imageAssets.addDisableIcon }}
+                              style={{ width: 20, height: 20 }}
+                            />
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerStep2BodyContentFooterTextDis,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-step2-body-content-footer-text-dis"
+                            >
+                              Add another Co-Signer{" "}
+                              {props.action === "remove-cosigner"
+                                ? "To Remove"
+                                : ""}
+                            </Text>
+                          </View>
+                        )}
+                    </View>
+                  </View>
+                  {!showSetRule && (
+                    <TouchableOpacity
+                      className={
+                        coSigners?.length > 0
+                          ? "verified-custd-mdl-startup-button-active"
+                          : "verified-custd-mdl-startup-button"
+                      }
+                      style={
+                        isReactNative && coSigners?.length > 0
+                          ? {
+                              ...styles.verifiedCustdMdlStartupButtonActive,
+                              marginBottom: "20px",
+                              width: "100%",
+                            }
+                          : isReactNative && coSigners?.length === 0
+                          ? {
+                              ...styles.verifiedCustdMdlStartupButton,
+                              marginBottom: "20px",
+                              width: "100%",
+                            }
+                          : isReactNative &&
+                            coSigners?.length > 0 &&
+                            !showAddMore &&
+                            coSigners?.length < 4
+                          ? {
+                              ...styles.verifiedCustdMdlStartupButtonActive,
+                              marginTop: "50px",
+                              marginBottom: "20px",
+                              width: "100%",
+                            }
+                          : isReactNative &&
+                            coSigners?.length === 0 &&
+                            !showAddMore &&
+                            coSigners?.length < 4
+                          ? {
+                              ...styles.verifiedCustdMdlStartupButton,
+                              marginTop: "50px",
+                              marginBottom: "20px",
+                              width: "100%",
+                            }
+                          : !showAddMore && coSigners?.length < 4
+                          ? {
+                              marginTop: "50px",
+                              marginBottom: "20px",
+                              width: "100%",
+                            }
+                          : { marginBottom: "20px", width: "100%" }
+                      }
+                      onPress={() => {
+                        if (coSigners?.length > 0) {
+                          setRequiredSigners(2);
+                          setShowSetRule(true);
+                          setShowAddMore(false);
+                        }
+                      }}
+                    >
+                      <Text style={styles.buttonText}>Proceed</Text>
+                    </TouchableOpacity>
+                  )}
+                </React.Fragment>
+              )}
+            </React.Fragment>
+          )}
+
+          {showLearnMore && (
+            <React.Fragment>
+              {learnMoreStep === "1" && (
+                <React.Fragment>
+                  <Image
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerBodyIcon,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-body-icon"
+                    source={{ uri: imageAssets.addCoSignerIcon2 }}
+                    alt=""
+                  />
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerMoreBody,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-more-body"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreHeaderCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-header-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-title-cont"
+                      >
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-title"
+                        >
+                          What is a Co-Signer?
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      A Co-Signer is a person who has the right given by you to
+                      generate a new pin on your behalf incase you forget it.
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerButtonsCont,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-buttons-cont"
+                  >
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonNeut,
+                              border: "1px solid #0C0C0E",
+                              color: "#0C0C0E",
+                            }
+                          : {
+                              border: "1px solid var(--Neutral-950, #0C0C0E)",
+                              color: "var(--Neutral-950, #0C0C0E)",
+                            }
+                      }
+                      onPress={() => setShowLearnMore(false)}
+                      className="verified-custd-mdl-add-cosigner-button-neut"
+                    >
+                      <Text>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setLearnMoreStep("2")}
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-button-action"
+                    >
+                      <Text>Next</Text>
+                    </TouchableOpacity>
+                  </View>
+                </React.Fragment>
+              )}
+
+              {learnMoreStep === "2" && (
+                <React.Fragment>
+                  <Image
+                    className="verified-custd-mdl-add-cosigner-body-icon"
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerBodyIcon,
+                          }
+                        : {}
+                    }
+                    source={{ uri: imageAssets.addCoSignerIcon3 }}
+                    alt=""
+                  />
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerMoreBody,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-more-body"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreHeaderont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-header-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-title-cont"
+                      >
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-title"
+                        >
+                          Why is it needed?
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      In blockchain application, it is impossible to reset a key
+                      if the PIN is forgotten you can login with the help of
+                      Co-Signer
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerButtonsCont,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-buttons-cont"
+                  >
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonNeut,
+                              border: "1px solid var(--Neutral-950, #0C0C0E)",
+                              color: "var(--Neutral-950, #0C0C0E)",
+                            }
+                          : {
+                              border: "1px solid var(--Neutral-950, #0C0C0E)",
+                              color: "var(--Neutral-950, #0C0C0E)",
+                            }
+                      }
+                      onPress={() => setLearnMoreStep("1")}
+                      className="verified-custd-mdl-add-cosigner-button-neut"
+                    >
+                      <Text>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                              border: "1px solid #0C0C0E",
+                              color: "#0C0C0E",
+                            }
+                          : {
+                              border: "1px solid var(--Neutral-950, #0C0C0E)",
+                              color: "var(--Neutral-950, #0C0C0E)",
+                            }
+                      }
+                      onPress={() => setLearnMoreStep("3")}
+                      className="verified-custd-mdl-add-cosigner-button-action"
+                    >
+                      <Text>Next</Text>
+                    </TouchableOpacity>
+                  </View>
+                </React.Fragment>
+              )}
+
+              {learnMoreStep === "3" && (
+                <React.Fragment>
+                  <Image
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerBodyIcon,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-body-icon"
+                    source={{ uri: imageAssets.addCoSignerIcon4 }}
+                    alt=""
+                  />
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerMoreBody,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-more-body"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreHeaderCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-header-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-title-cont"
+                      >
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-title"
+                        >
+                          Who can be my Co-Signer?
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      You can nominate your trusted acquaintances, family
+                      members and even yourself as a co-signer.
+                    </Text>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabelLink,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label-link"
+                    >
+                      Learn More in Details
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlAddCosignerButtonsCont,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-buttons-cont"
+                  >
+                    <TouchableOpacity
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonNeut,
+                              border: "1px solid #0C0C0E",
+                              color: "#0C0C0E",
+                            }
+                          : {
+                              border: "1px solid var(--Neutral-950, #0C0C0E)",
+                              color: "var(--Neutral-950, #0C0C0E)",
+                            }
+                      }
+                      onPress={() => setLearnMoreStep("2")}
+                      className="verified-custd-mdl-add-cosigner-button-neut"
+                    >
+                      <Text>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setCosignerStep("2");
+                        setShowAddMore(false);
+                        setShowLearnMore(false);
+                        setLearnMoreStep("1");
+                      }}
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-button-action"
+                    >
+                      <Text>Start</Text>
+                    </TouchableOpacity>
+                  </View>
+                </React.Fragment>
+              )}
+            </React.Fragment>
+          )}
+        </React.Fragment>
+      )}
+      {fontsLoaded && showRemoveSuccess && (
+        <Success
+          platform={props.platform}
+          action={props.action}
+          setStep={props.setStep}
+          stepToSet="8"
+          actionHeaderText="Successful"
+          customTextHeader="Successful"
+          customTextFooter="Congratulations! You have successfully removed cosigners and set new signing rule."
+          actionFooterText="Congratulations! You have successfully removed cosigners and set new signing rule."
+          showButton={props.dashbordElement ? true : false}
+          buttonText={props.dashbordElement ? "Go To Dashboard" : ""}
+          handleShowDashboard={() => {
+            if (props.setShowResetPin) {
+              props.setShowResetPin(false);
+            }
+            if (props.setShowRemoveCosigner) {
+              props.setShowRemoveCosigner(false);
+            }
+            props.setShowDashboard(true);
+          }}
+          buttonFunc={() => {
+            if (props.setShowResetPin) {
+              props.setShowResetPin(false);
+            }
+            if (props.setShowRemoveCosigner) {
+              props.setShowRemoveCosigner(false);
+            }
+            props.setShowDashboard(true);
+          }}
+        />
+      )}
+
+      {!fontsLoaded && <Text>Loading Module Fonts...</Text>}
+    </View>
+  );
+};
+
+export default AddCosignersPage;

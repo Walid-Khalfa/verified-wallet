@@ -1,0 +1,444 @@
+import React, { useEffect, useState } from "react";
+import { debounce } from "lodash";
+import { actionTexts, countriesDetails, imageAssets } from "../utils/constants";
+import { useVaultStore } from "../services/store";
+import {
+  initWalletAndContract,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+} from "../utils/helpers";
+import ContactPage from "./contact";
+import OTPPage from "./otp";
+import CreatePinPage from "./createPin";
+import Success from "../components/success";
+import AddCosignersPage from "./addCosigners";
+import EnterPinPage from "./enterPin";
+import { VerifiedCustodyHelpers } from "../utils/types";
+
+const FTUPage = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+    rnPasskey: any;
+  };
+  createPasskeyDomain?: string;
+  getPasskeyDomain?: string;
+  fontsLoaded?: boolean;
+  popupView?: boolean;
+  action?: string;
+  vaultData?: any;
+  txData?: any;
+  chainId?: number;
+  defaultCountry?: {
+    area: string;
+    flag: string;
+    name: string;
+  };
+  showLogoPage?: boolean;
+  logoPageElement?: React.JSX.Element;
+  logoTimeoutTime?: number;
+  showStartupPage?: boolean;
+  startupPageElement?: React.JSX.Element;
+  enablePhone?: boolean;
+  setisOnboard?: (isOnboard: boolean) => void;
+  helperFunctions?: VerifiedCustodyHelpers;
+  setIsLoading?: (isLoading: boolean) => void;
+  setShowDashboard?: (showDashboard: boolean) => void;
+  setShowResetPin?: (showResetPin: boolean) => void;
+  setShowRemoveCosigner?: (showRemoveCosigner: boolean) => void;
+  dashbordElement?: React.ComponentType<{
+    setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  }>;
+  rootTagId?: string;
+  rootExpandedWidth?: string;
+  rootExpandedHeight?: string;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+  } = props?.platform;
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(
+    props.fontsLoaded || false
+  );
+  const [showLogo, setShowLogo] = useState<boolean>(
+    props.showLogoPage || false
+  );
+  const [allCountries, setAllCountries] = useState<any[]>([]);
+  const [step, setStep] = useState<string>("2");
+
+  const [selectedCountry, setSelectedCountry] = useState(
+    props.defaultCountry || {
+      area: "1",
+      flag: imageAssets.usaFlag,
+      name: "United States",
+    }
+  );
+
+  const [userNumberFmt, setUserNumberFmt] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [showSuccessBtn, setShowSuccessBtn] = useState<boolean>(false);
+  const [successBtnText, setSuccessBtnText] = useState<string>("");
+  const [successBtnNeutText, setSuccessBtnNeutText] = useState<string>("");
+  const [actionHeaderText, setActionHeaderText] = useState<string>("");
+  const [actionFooterText, setActionFooterText] = useState<string>("");
+  const [successBtnFunc, setSuccessBtnFunc] = useState<any>(null);
+  const [successBtnNeutFunc, setSuccessBtnNeutFunc] = useState<any>(null);
+  const [isExistingUser, setIsExistingUser] = useState<boolean>(false);
+
+  const {
+    setChainId,
+    setAddress,
+    setPk,
+    setProvider,
+    setSigner,
+    setVaultContract,
+    setVaultData,
+    vaultData,
+    chainId,
+    vaultContract,
+  } = useVaultStore();
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else if (Font) {
+        //load fonts with expo-font for react native.
+        await loadAllGoogleFontsRN(Font);
+        setFontsLoaded(true);
+      } else {
+        setFontsLoaded(true);
+      }
+    };
+    if (!props.fontsLoaded) {
+      PreloadGoogleFonts();
+    }
+  }, []);
+
+  useEffect(() => {
+    const initializeUserWalletAndContract = async () => {
+      let lastPk: any;
+
+      if (!isReactNative && chrome?.storage?.local) {
+        lastPk = await new Promise((resolve) => {
+          chrome.storage.local.get(["lastPk"], (result) => {
+            resolve(result.lastPk);
+          });
+        });
+      } else if (!isReactNative && localStorage) {
+        lastPk = localStorage.getItem("lastPk");
+      } else if (isReactNative && AsyncStorage) {
+        lastPk = AsyncStorage.getItem("lastPk");
+      }
+
+      const walletAndContractDetails = await initWalletAndContract(
+        props.chainId,
+        lastPk && lastPk?.length > 0 ? lastPk : undefined
+      );
+      setChainId(walletAndContractDetails.chainId);
+      setAddress(walletAndContractDetails.address);
+      setPk(walletAndContractDetails.pk);
+      setProvider(walletAndContractDetails.provider);
+      setSigner(walletAndContractDetails.signer);
+      setVaultData(walletAndContractDetails.vaultData);
+      if (walletAndContractDetails.vaultContract?.contractAddress) {
+        setVaultContract(walletAndContractDetails.vaultContract);
+      } else {
+        setVaultContract(undefined);
+      }
+    };
+    if (!vaultContract?.contractAddress) {
+      initializeUserWalletAndContract();
+    }
+  }, [vaultContract]);
+
+  useEffect(() => {
+    const handleLogoDisplay = debounce(() => {
+      setShowLogo(false);
+    }, props.logoTimeoutTime ?? 3000);
+    handleLogoDisplay();
+  }, []);
+
+  useEffect(() => {
+    const getAndFormatAllCountries = () => {
+      const fmtCountries: any = countriesDetails
+        .map((cnt: any) => {
+          if (!cnt) return undefined;
+          return {
+            name: cnt.name,
+            countryName: cnt.name,
+            officialName: cnt.name,
+            currencySymbol: cnt.currency,
+            currencyName: cnt.currency,
+            officialCurrencySymbol: cnt.currency,
+            countryCode: cnt.code,
+            flag: cnt.flag,
+            continent: cnt.continent,
+            phone_code: cnt.phone_code,
+            code: cnt.code,
+          };
+        })
+        .filter(Boolean);
+      setAllCountries(fmtCountries);
+    };
+    getAndFormatAllCountries();
+  }, []);
+
+  return (
+    <ScrollView style={{ padding: 20, width: "100%", heigth: "100%" }}>
+      {fontsLoaded && showLogo && props.logoPageElement && (
+        <View>{props.logoPageElement}</View>
+      )}
+      {fontsLoaded && !showLogo && (
+        <View style={{ width: "100%", heigth: "100%" }}>
+          {/* Render steps */}
+          {step === "2" && (
+            <ContactPage
+              platform={props.platform}
+              fontsLoaded={fontsLoaded}
+              setStep={setStep}
+              setIsLoading={props.setIsLoading}
+              setUserNumberFmt={setUserNumberFmt}
+              userNumberFmt={userNumberFmt}
+              setUserEmail={setUserEmail}
+              userEmail={userEmail}
+              setSelectedCountry={setSelectedCountry}
+              selectedCountry={selectedCountry}
+              allCountries={allCountries}
+              helperFunctions={props.helperFunctions}
+              enablePhone={props.enablePhone}
+            />
+          )}
+          {step === "3" && (
+            <OTPPage
+              platform={props.platform}
+              fontsLoaded={fontsLoaded}
+              setStep={setStep}
+              setIsLoading={props.setIsLoading}
+              userNumberFmt={userNumberFmt}
+              setUserNumberFmt={setUserNumberFmt}
+              setUserEmail={setUserEmail}
+              userEmail={userEmail}
+              selectedCountry={selectedCountry}
+              helperFunctions={props.helperFunctions}
+              setIsExistingUser={setIsExistingUser}
+            />
+          )}
+
+          {step === "4" && (
+            <CreatePinPage
+              platform={props.platform}
+              fontsLoaded={fontsLoaded}
+              setStep={setStep}
+              setIsLoading={props.setIsLoading}
+              setShowSuccessBtn={setShowSuccessBtn}
+              setSuccessBtnText={setSuccessBtnText}
+              setSuccessBtnNeutText={setSuccessBtnNeutText}
+              setSuccessBtnFunc={setSuccessBtnFunc}
+              setSuccessBtnNeutFunc={setSuccessBtnNeutFunc}
+              userNumberFmt={userNumberFmt}
+              userEmail={userEmail}
+              selectedCountry={selectedCountry}
+              action={props.action}
+              vaultData={props.vaultData}
+              txData={props.txData}
+              setActionHeaderText={setActionHeaderText}
+              setActionFooterText={setActionFooterText}
+              helperFunctions={props.helperFunctions}
+              isExistingUser={isExistingUser}
+              rootTagId={props.rootTagId}
+              rootExpandedWidth={props.rootExpandedWidth}
+              rootExpandedHeight={props.rootExpandedHeight}
+              createPasskeyDomain={props?.createPasskeyDomain}
+              getPasskeyDomain={props?.getPasskeyDomain}
+            />
+          )}
+
+          {step === "5" && (
+            <Success
+              platform={props.platform}
+              setStep={setStep}
+              stepToSet="6"
+              customTextHeader="Successful"
+              customTextFooter="Congratulations! You have successfully created a new account."
+              action={props.action}
+              showButton={showSuccessBtn}
+              buttonText={successBtnText}
+              buttonNeutText={successBtnNeutText}
+              buttonFunc={successBtnFunc}
+              buttonNeutFunc={successBtnNeutFunc}
+              actionHeaderText={actionHeaderText}
+              actionFooterText={actionFooterText}
+            />
+          )}
+
+          {step === "6" && (
+            <AddCosignersPage
+              platform={props.platform}
+              fontsLoaded={fontsLoaded}
+              setStep={setStep}
+              setIsLoading={props.setIsLoading}
+              userNumberFmt={userNumberFmt}
+              userEmail={userEmail}
+              selectedCountry={selectedCountry}
+              allCountries={allCountries}
+              helperFunctions={props.helperFunctions}
+              enablePhone={props.enablePhone}
+              dashbordElement={props.dashbordElement}
+              setShowDashboard={props.setShowDashboard}
+              setShowResetPin={props.setShowResetPin}
+              setShowRemoveCosigner={props.setShowRemoveCosigner}
+            />
+          )}
+
+          {step === "7" && props.action === "" && (
+            <Success
+              platform={props.platform}
+              action={props.action}
+              setStep={setStep}
+              stepToSet="8"
+              actionHeaderText="Successful"
+              customTextHeader="Successful"
+              customTextFooter="Congratulations! You have successfully added Co-signers to your account."
+              actionFooterText="Congratulations! You have successfully added Co-signers to your account."
+              showButton={props.dashbordElement ? true : false}
+              buttonText={props.dashbordElement ? "Go To Dashboard" : ""}
+              handleShowDashboard={() => {
+                if (props.setShowResetPin) {
+                  props.setShowResetPin(false);
+                }
+                if (props.setShowRemoveCosigner) {
+                  props.setShowRemoveCosigner(false);
+                }
+                props.setShowDashboard(true);
+              }}
+              buttonFunc={() => {
+                if (props.setShowResetPin) {
+                  props.setShowResetPin(false);
+                }
+                if (props.setShowRemoveCosigner) {
+                  props.setShowRemoveCosigner(false);
+                }
+                props.setShowDashboard(true);
+              }}
+            />
+          )}
+
+          {step === "7" && props.action !== "" && (
+            <Success
+              platform={props.platform}
+              action={props.action}
+              messageTosend={
+                props.action === "signRecovery"
+                  ? {
+                      type: "signRecovery",
+                      value: {
+                        vaultData: props.vaultData,
+                        txData: { newUser: true, ...props.txData },
+                        chainId: chainId,
+                      },
+                    }
+                  : { type: "closePopup", key: "", value: "" }
+              }
+              actionHeaderText="Successful"
+              customTextHeader="Successful"
+              customTextFooter="Congratulations! You have successfully added Co-signers to your account."
+              actionFooterText="Congratulations! You have successfully added Co-signers to your account."
+              showButton={props.dashbordElement ? true : false}
+              buttonText={props.dashbordElement ? "Go To Dashboard" : ""}
+              handleShowDashboard={() => {
+                if (props.setShowResetPin) {
+                  props.setShowResetPin(false);
+                }
+                if (props.setShowRemoveCosigner) {
+                  props.setShowRemoveCosigner(false);
+                }
+                props.setShowDashboard(true);
+              }}
+              buttonFunc={() => {
+                if (props.setShowResetPin) {
+                  props.setShowResetPin(false);
+                }
+                if (props.setShowRemoveCosigner) {
+                  props.setShowRemoveCosigner(false);
+                }
+                props.setShowDashboard(true);
+              }}
+            />
+          )}
+
+          {step === "8" && props.dashbordElement && (
+            <props.dashbordElement setIsLoading={props.setIsLoading} />
+          )}
+
+          {step === "8" && !props.dashbordElement && (
+            <React.Fragment></React.Fragment>
+          )}
+
+          {step === "0" && (
+            <EnterPinPage
+              platform={props.platform}
+              fontsLoaded={fontsLoaded}
+              vaultId={vaultData?.vaultId}
+              setisOnboard={props.setisOnboard}
+              hashedVaultId={vaultData?.hashedVaultId}
+              encrptedPk={vaultData?.pk}
+              vaultAddress={vaultData?.address}
+              vaultChannel={vaultData?.channel}
+              actionText={actionTexts["getPk"]}
+              setIsLoading={props.setIsLoading}
+              newChainId={Number(chainId || props.chainId)}
+              action={"getPk"}
+              reqVaultData={vaultData}
+              reqTxData={
+                props.txData
+                  ? Object.keys(props.txData)?.map((ky) => {
+                      props.txData[ky] = decodeURIComponent(props.txData[ky]);
+                      return props.txData;
+                    })[Object.keys(props.txData)?.length - 1]
+                  : null
+              }
+              helperFunctions={props.helperFunctions}
+              setUserEmail={setUserEmail}
+              setUserNumberFmt={setUserNumberFmt}
+              setSelectedCountry={setSelectedCountry}
+              enablePhone={props.enablePhone}
+              setShowDashboard={props.setShowDashboard}
+              rootTagId={props.rootTagId}
+              rootExpandedWidth={props.rootExpandedWidth}
+              rootExpandedHeight={props.rootExpandedHeight}
+              createPasskeyDomain={props?.createPasskeyDomain}
+              getPasskeyDomain={props?.getPasskeyDomain}
+            />
+          )}
+        </View>
+      )}
+      {!fontsLoaded && (
+        <View style={{ padding: 20, width: "100%", heigth: "100%" }}>
+          <Text>Loading Module Fonts...</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+};
+
+export default FTUPage;

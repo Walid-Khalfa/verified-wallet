@@ -1,0 +1,478 @@
+import {
+  contractAddress,
+  Custody,
+  Provider,
+  VerifiedWallet,
+} from "@verified-network/verified-sdk";
+import { allGoogleFontUrls, defaultChainId, imageAssets } from "./constants";
+import { ChainConfig } from "./config";
+import { pbkdf2 } from "@noble/hashes/pbkdf2";
+import { sha256 } from "@noble/hashes/sha256";
+import { randomBytes, utf8ToBytes, bytesToUtf8 } from "@noble/hashes/utils";
+import { gcm } from "@noble/ciphers/aes";
+import crypt from "crypto-js";
+import { toast } from "react-toastify";
+import React from "react";
+import {
+  base,
+  baseSepolia,
+  gnosis,
+  mainnet,
+  polygon,
+  sepolia,
+} from "viem/chains";
+import { http } from "viem";
+import { computeNexusAccount } from "../lib/biconomyRNFix";
+
+/**
+ *
+ * @param document Any web page loaded in the browser / Dom tree
+ */
+export const loadAllGoogleFonts = (document: Document) => {
+  const apiExists = document.querySelector(
+    `link[href="https://fonts.googleapis.com"]`
+  );
+  if (!apiExists) {
+    const apiLink = document.createElement("link");
+    apiLink.rel = "preconnect";
+    apiLink.href = "https://fonts.googleapis.com";
+    document.head.appendChild(apiLink);
+  }
+  const staticExists = document.querySelector(
+    `link[href="https://fonts.gstatic.com"]`
+  );
+  if (!staticExists) {
+    const staticLink = document.createElement("link");
+    staticLink.rel = "preconnect";
+    staticLink.href = "https://fonts.gstatic.com";
+    document.head.appendChild(staticLink);
+  }
+  allGoogleFontUrls.map((fontUrl) => {
+    const fontExists = document.querySelector(`link[href="${fontUrl}"]`);
+    if (!fontExists) {
+      const fontLink = document.createElement("link");
+      fontLink.rel = "stylesheet";
+      fontLink.href = fontUrl;
+      document.head.appendChild(fontLink);
+    }
+  });
+  return true;
+};
+
+/**
+ *
+ * @param expoFont default export from expo-font for react-native
+ */
+export const loadAllGoogleFontsRN = async (expoFont: any) => {
+  await expoFont?.loadAsync({
+    Roboto: require("../assets/reactNativeFonts/Roboto-Regular.ttf"),
+    Manrope: require("../assets/reactNativeFonts/Manrope-Regular.ttf"),
+    Hind: require("../assets/reactNativeFonts/Hind-Regular.ttf"),
+  });
+  return true;
+};
+
+/**
+ * initialize user's wallet and vault contract using existing private key or create a new wallet for user
+ * unsupported/invalid chainId passed will automatically use default supported chainId
+ * @param chainId
+ * @param privateKey
+ *
+ */
+export const initWalletAndContract = async (
+  chainId?: number,
+  privateKey?: string
+) => {
+  try {
+    let sender: VerifiedWallet;
+    //import existing wallet or create new one.
+    if (privateKey) {
+      sender = new VerifiedWallet(privateKey);
+    } else {
+      const mnemonics = VerifiedWallet.generateMnemonic();
+      sender = VerifiedWallet.importWallet(mnemonics);
+    }
+
+    //initialize provider, signer, privatekey and vault contract
+    const cntAddresses: any = contractAddress;
+    const _chainId =
+      chainId &&
+      cntAddresses[chainId]?.Custody &&
+      ChainConfig[chainId]?.rpcUrls?.length > 0
+        ? chainId
+        : defaultChainId;
+    const provider = ChainConfig[_chainId]?.rpcUrls[0];
+    const signer = sender.setProvider(new Provider(provider));
+    const pk = sender.privateKey;
+    const vaultContract = new Custody(signer, cntAddresses[_chainId]?.Custody);
+    const _signer: any = signer;
+    const chainToUse = [
+      base,
+      mainnet,
+      gnosis,
+      polygon,
+      sepolia,
+      baseSepolia,
+    ].find((nt) => Number(nt?.id) === Number(_chainId));
+    const address = await computeNexusAccount(chainToUse, http(), _signer);
+    if (_chainId === 11155111) {
+      console.log("address to send test ETH to: ", sender.address);
+    }
+
+    //valid return
+    return {
+      chainId: _chainId,
+      address,
+      pk,
+      signer,
+      provider,
+      vaultContract,
+      vaultData: null,
+    };
+  } catch (err) {
+    if (process.env.REACT_APP_NODE_ENV !== "production") {
+      console.error(
+        "Error while initializing user's wallet and contract: ",
+        err
+      );
+    }
+    //default return;
+    return {
+      chainId: null,
+      address: null,
+      pk: null,
+      signer: null,
+      provider: null,
+      vaultContract: null,
+      vaultData: null,
+    };
+  }
+};
+
+export const hashTheString = (text: string): string => {
+  const lower = text.toLowerCase();
+  const hash = sha256(utf8ToBytes(lower));
+  return (
+    "0x" +
+    Array.from(hash)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("") //pure js for react native
+  );
+};
+
+export const hashTheBuffer = (buffer: ArrayBuffer | Uint8Array): string => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const hash = sha256(bytes);
+  return (
+    "0x" +
+    Array.from(hash)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
+};
+
+export const encryptString = (text: string, secretKey: string) => {
+  const encryptedAES = crypt.AES.encrypt(text, secretKey);
+  return encryptedAES.toString();
+};
+
+export const decryptString = (encryptedText: string, secretKey: string) => {
+  var decryptedBytes = crypt.AES.decrypt(encryptedText, secretKey);
+  var decryptedText = decryptedBytes.toString(crypt.enc.Utf8);
+  return decryptedText;
+};
+
+export const getErrorToastContent = (title: string, content: string) => {
+  return (
+    <div className="verified-custd-mdl-general-web-toast-error">
+      <img style={{ marginLeft: "5px" }} src={imageAssets.errorAlert} alt="" />
+      <div className="verified-custd-mdl-general-web-toast-error-container">
+        <p className="verified-custd-mdl-general-web-toast-error-title">
+          {title}
+        </p>
+        <p className="verified-custd-mdl-general-web-toast-error-label">
+          {content}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export const getSuccessToastContent = (
+  title: string,
+  content: string,
+  link: string
+) => {
+  return (
+    <div className="verified-custd-mdl-general-web-toast-success">
+      <div className="verified-custd-mdl-general-web-toast-success-cont">
+        <img
+          style={{ marginLeft: "5px" }}
+          src={imageAssets.successAlert}
+          alt=""
+        />
+        <div className="verified-custd-mdl-general-web-toast-success-container">
+          <p className="verified-custd-mdl-general-web-toast-error-title">
+            {title}
+          </p>
+          <p className="verified-custd-mdl-general-web-toast-error-label">
+            {content}
+          </p>
+        </div>
+      </div>
+      {link?.length > 0 && (
+        <div className="verified-custd-mdl-general-web-toast-success-link">
+          <a
+            className="verified-custd-mdl-general-web-toast-success-link-text"
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Follow your transaction.
+          </a>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const errorToast = (title: string, content: string) => {
+  toast.dismiss();
+  return toast.error(getErrorToastContent(title, content), {
+    closeButton: false,
+    position: "top-center",
+    autoClose: 3000,
+    hideProgressBar: false,
+    pauseOnHover: false,
+    draggable: false,
+    closeOnClick: false,
+    style: {
+      background: "#fef2f2",
+      width: "600px",
+      height: "67px",
+      maxHeight: "67px",
+      position: "absolute",
+      top: "5px",
+      right: "5px",
+      borderRadius: "8px",
+    },
+    icon: false,
+  });
+};
+
+export const successToast = (title: string, content: string, link: string) => {
+  toast.dismiss();
+  return toast.success(getSuccessToastContent(title, content, link), {
+    closeButton: false,
+    position: "top-center",
+    autoClose: 3000,
+    hideProgressBar: false,
+    pauseOnHover: false,
+    draggable: false,
+    closeOnClick: false,
+    style: {
+      background: "var(--Success-50, #F1F8ED)",
+
+      width: "600px",
+      height: "67px",
+      maxHeight: "67px",
+      position: "absolute",
+      top: "5px",
+      right: "5px",
+      borderRadius: "8px",
+    },
+    icon: false,
+  });
+};
+
+export const base64UrlEncode = (buf) => {
+  return Buffer.from(buf)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+export const base64UrlDecode = (str) => {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = str.length % 4 === 0 ? 0 : 4 - (str.length % 4);
+  str += "=".repeat(pad);
+  return new Uint8Array(Buffer.from(str, "base64"));
+}
+
+export const resolveGlobalStyleUnit = (
+  isReactNative: boolean,
+  unitValueString: string,
+  baseRem = 16
+) => {
+  if (!isReactNative) {
+    return unitValueString;
+  }
+  const value = parseFloat(unitValueString);
+
+  if (unitValueString.endsWith("rem")) {
+    return value * baseRem;
+  } else if (unitValueString.endsWith("px")) {
+    return value; // treat px as dp
+  } else {
+    return value; // unitless, just parse
+  }
+};
+
+const hexToBytes = (hex: string) => {
+  // Remove 0x prefix if present
+  const cleanHex =
+    hex.startsWith("0x") || hex.startsWith("0X") ? hex.slice(2) : hex;
+
+  if (cleanHex.length % 2 !== 0) {
+    throw new Error("Invalid hex string: odd length");
+  }
+
+  const byteLength = cleanHex.length / 2;
+  const bytes = new Uint8Array(byteLength);
+  for (let i = 0; i < byteLength; i++) {
+    const byteHex = cleanHex.substr(i * 2, 2);
+    bytes[i] = parseInt(byteHex, 16);
+  }
+  return bytes;
+};
+
+export const publicKeyCredentialCreationOptions = (
+  projectName: string,
+  vaultId: string,
+  hashedVaultId: string
+) => {
+  const userId = hexToBytes(hashedVaultId);
+  const credentials: any = {
+    challenge: randomBytes(32),
+    rp: {
+      name: projectName,
+    },
+    user: {
+      id: userId,
+      name: vaultId,
+      displayName: vaultId,
+    },
+    pubKeyCredParams: [
+      { type: "public-key", alg: -7 }, // ES256
+      { type: "public-key", alg: -257 }, // RS256
+    ],
+    authenticatorSelection: {
+      userVerification: "preferred",
+      residentKey: "required",
+    },
+    timeout: 60000,
+    attestation: "none",
+  };
+  return credentials;
+};
+
+export const base64ToArrayBuffer = (base64: any) => {
+  const binary = atob(base64);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return buffer;
+};
+
+export const publicKeyCredentialRequestOptions = () => {
+  const credential: any = {
+    challenge: randomBytes(32),
+    timeout: 60000,
+    userVerification: "preferred",
+    // allowCredentials: [
+    //   {
+    //     type: "public-key",
+    //     userHandle: userId,
+    //   },
+    // ], //fetch all by default
+  };
+
+  return credential;
+};
+
+// Helpers for base64url encoding/decoding
+const Uint8ArraytoBase64 = (buf: Uint8Array): string =>
+  btoa(String.fromCharCode(...buf))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+// Base64url decode to Uint8Array
+const Base64URLtoUint8Array = (base64url: string): Uint8Array => {
+  const base64 =
+    base64url.replace(/-/g, "+").replace(/_/g, "/") +
+    "===".slice((base64url.length + 3) % 4);
+  const binary = atob(base64);
+  return new Uint8Array([...binary].map((char) => char.charCodeAt(0)));
+};
+
+export const encryptWithPasskey = async (
+  plaintext: string,
+  rawId: ArrayBuffer | Uint8Array, // allow both ArrayBuffer or Uint8Array
+  rawIdString: string
+): Promise<string> => {
+  // Convert rawId to Uint8Array if needed
+  const rawIdBytes =
+    rawId instanceof Uint8Array ? rawId : new Uint8Array(rawId);
+
+  // Generate random 8 bytes for salt nonce
+  const randomBytes8 = randomBytes(8);
+  const randomHex = Array.from(randomBytes8)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  // Hash rawIdString + randomHex to create salt string
+  const saltString = hashTheString(`${rawIdString}:${randomHex}`);
+  const salt = utf8ToBytes(saltString);
+
+  // Generate random 12-byte IV (nonce) for AES-GCM
+  const iv = randomBytes(12);
+
+  // Derive a 256-bit key using PBKDF2 with SHA-256 and 300k iterations
+  const key = pbkdf2(sha256, rawIdBytes, salt, { c: 300_000, dkLen: 32 });
+
+  // Encrypt plaintext using AES-GCM (noble's gcm)
+  const cipher = gcm(key, iv);
+  const ciphertext = cipher.encrypt(utf8ToBytes(plaintext));
+
+  // Return combined base64url(salt) + "." + base64url(iv) + "." + base64url(ciphertext)
+  return [
+    Uint8ArraytoBase64(salt),
+    Uint8ArraytoBase64(iv),
+    Uint8ArraytoBase64(ciphertext),
+  ].join(".");
+};
+
+export const decryptWithPasskey = async (
+  encryptedString: string,
+  rawId: ArrayBuffer | Uint8Array // allow both ArrayBuffer or Uint8Array
+): Promise<string> => {
+  const [saltB64, ivB64, ciphertextB64] = encryptedString.split(".");
+  if (!saltB64 || !ivB64 || !ciphertextB64) {
+    throw new Error("Invalid encrypted data format");
+  }
+
+  // Convert rawId to Uint8Array if needed
+  const rawIdBytes =
+    rawId instanceof Uint8Array ? rawId : new Uint8Array(rawId);
+
+  const salt = Base64URLtoUint8Array(saltB64);
+  const iv = Base64URLtoUint8Array(ivB64);
+  const ciphertext = Base64URLtoUint8Array(ciphertextB64);
+
+  // Derive the same key with PBKDF2 (300k iterations)
+  const key = pbkdf2(sha256, rawIdBytes, salt, { c: 300_000, dkLen: 32 });
+
+  // Decrypt ciphertext using AES-GCM
+  const cipher = gcm(key, iv);
+
+  try {
+    const plaintextBytes = cipher.decrypt(ciphertext);
+    return bytesToUtf8(plaintextBytes);
+  } catch {
+    throw new Error("Decryption failed: invalid key or corrupted data");
+  }
+};

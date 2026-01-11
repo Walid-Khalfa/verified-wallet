@@ -1,0 +1,1933 @@
+export const globalStyles: any = {
+  verifiedCustdMdlContainer: {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    paddingBottom: 20,
+    overflowY: "scroll",
+    overflowX: "hidden",
+    position: "relative",
+  },
+
+  verifiedCustdMdlStartupOutterGrad: {
+    // <LinearGradient
+    //   colors={['#643fff', '#381ab7']}
+    //   start={{ x: 0.5, y: 0 }}
+    //   end={{ x: 0.5, y: 1 }}
+    //   style={styles.verifiedCustdMdlStartupOutterGrad}
+    // >
+    //   {/* your content here */}
+    // </LinearGradient>
+
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "column",
+    overflowY: "scroll",
+    overflowX: "hidden",
+    // background is handled by LinearGradient above
+  },
+
+  verifiedCustdMdlStartupOutterNorm: {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "column",
+    overflowY: "scroll",
+    overflowX: "hidden",
+    backgroundColor: "#ffffff",
+  },
+
+  verifiedCustdMdlStartup: {
+    width: 650,
+    height: "auto",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "column",
+    overflowX: "hidden",
+    overflowY: "scroll",
+    paddingBottom: 20,
+    borderWidth: 1,
+    borderColor: "#0F122E",
+    borderRadius: 10,
+    position: "relative",
+  },
+
+  verifiedCustdMdlLoadingScreen: {
+    borderRadius: 10,
+    width: "100%",
+    flexShrink: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    zIndex: 100,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "scroll",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+
+  verifiedCustdMdlStartupIconContainer: {
+    width: "76.119%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    flexDirection: "column",
+    height: 298,
+  },
+
+  verifiedCustdMdlStartupIconShadow: {
+    position: "absolute",
+    bottom: 10,
+    right: 70,
+    width: "48.5%",
+  },
+
+  verifiedCustdMdlStartupTextContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    marginRight: 20,
+    marginLeft: 20,
+  },
+
+  verifiedCustdMdlStartupTextHeader: {
+    color: "#ffffff",
+    fontFamily: "Manrope",
+    fontSize: 33.6, // 2.1rem
+    fontWeight: "700",
+    lineHeight: 45,
+    margin: 0,
+  },
+
+  verifiedCustdMdlStartupTextFooter: {
+    color: "#ffffff",
+    fontFamily: "Roboto",
+    fontSize: 14.4, // 0.9rem
+    fontWeight: "400",
+    lineHeight: 24,
+    opacity: 0.8,
+  },
+
+  verifiedCustdMdlFtuStartupButton: {
+    display: "flex",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#cfe600",
+    cursor: "pointer",
+    userSelect: "none",
+    color: "#0C0C0E",
+    textAlign: "center",
+    margin: 20,
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontWeight: "500",
+    lineHeight: 24,
+    outline: "none",
+    borderWidth: 0,
+  },
+
+  verifiedCustdMdlStartupLanguage: {
+    backgroundColor: "#ffffff",
+    height: "100%",
+    width: "100%",
+  },
+
+  verifiedCustdMdlStartupLanguageContentContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 32,
+    width: "100%",
+  },
+
+  verifiedCustdMdlStLanguageContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 20,
+    alignSelf: "stretch",
+    width: "100%",
+  },
+
+  verifiedCustdMdlStLanguageText: {
+    color: "#0c0c0e",
+    fontFamily: "Roboto",
+    fontSize: 24, // 1.5rem
+    fontWeight: "700",
+    lineHeight: 24,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlMsSearchContentHover: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#9da3ff",
+    backgroundColor: "#ecefff",
+  },
+
+  verifiedCustdMdlStContactInput: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 14,
+    width: "90%",
+  },
+
+  verifiedCustdMdlStContactContentContainer: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    width: "100%",
+  },
+
+  verifiedCustdMdlStContactFirstSection: {
+    display: "flex",
+    width: 150,
+    height: 44,
+    paddingLeft: 6,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#f7f7f8",
+    cursor: "pointer",
+    userSelect: "none",
+  },
+
+  verifiedCustdMdlStContactSelectionIcon: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+    borderRadius: 24,
+    cursor: "pointer",
+    userSelect: "none",
+    overflow: "hidden",
+    width: 28,
+    height: 28,
+  },
+
+  verifiedCustdMdlStContactSelectionText: {
+    color: "#0c0c0e",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6, // 14 * 1.4
+    width: 40,
+    flexShrink: 0,
+  },
+
+  verifiedCustdMdlStContactDropdown: {},
+
+  verifiedCustdMdlStContactFooterFirstSection: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    width: "100%",
+  },
+
+  verifiedCustdMdlStContactFooterSecondSection: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    width: "100%",
+  },
+
+  verifiedCustdMdlCustomBlankPage: {
+    height: 0,
+  },
+
+  // verifiedCustdMdlStContactInputError: {
+  //   display: "flex",
+  //   alignItems: "center",
+  //   gap: 4,
+  // },
+
+  verifiedCustdMdlStartupOtpText: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlStartupOtpHeaderText: {
+    alignSelf: "stretch",
+    color: "#5b5d6e",
+    fontFamily: "Roboto",
+    fontSize: 11.2,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 16.8, // 11.2 * 1.5
+    maxWidth: "100%",
+  },
+
+  verifiedCustdMdlOtpInputGroup: {
+    display: "flex",
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+
+  verifiedCustdMdlOtpInput: {
+    display: "flex",
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingLeft: 12,
+    paddingRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#f7f7f8",
+    width: "25%",
+    textAlign: "center",
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6, // 14 * 1.4
+  },
+
+  verifiedCustdMdlOtpInputRed: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E23636",
+    backgroundColor: "#F7F7F8",
+    display: "flex",
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingLeft: 12,
+    paddingRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    alignSelf: "stretch",
+    width: "25%",
+    textAlign: "center",
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6, // 14 * 1.4
+  },
+
+  verifiedCustdMdlOtpIncorrectText: {
+    color: "#E23636",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 16.8, // 12 * 1.4
+    maxWidth: 200,
+  },
+
+  verifiedCustdMdlOtpTimer: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    flexDirection: "row",
+  },
+
+  verifiedCustdMdlOtpTimerText: {
+    color: "#0c0c0e",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+  },
+
+  verifiedCustdMdlOtpTimerTextRed: {
+    color: "#e23636",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+  },
+
+  verifiedCustdMdlOtpResendText: {
+    color: "#b6b7c3",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+  },
+
+  verifiedCustdMdlOtpResendTextActive: {
+    color: "#603ff4",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+  },
+
+  verifiedCustdMdlStOtpIcon: {},
+
+  verifiedCustdMdlStartupButton: {
+    display: "flex",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#cfe600",
+    color: "#0C0C0E",
+    textAlign: "center",
+    opacity: 0.5,
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 24, // 16 * 1.5
+    width: "90%",
+    maxWidth: 500,
+  },
+
+  verifiedCustdMdlStartupButtonActive: {
+    display: "flex",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#cfe600",
+    color: "#0C0C0E",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 24, // 16 * 1.5
+    width: "90%",
+    maxWidth: 500,
+  },
+
+  verifiedCustdMdlOtpInputPassword: {
+    fontWeight: "900",
+  },
+
+  verifiedCustdMdlStartupButtonClick: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#0c0c0e",
+    display: "flex",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    color: "#0C0C0E",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 24, // 16 * 1.5
+    width: "90%",
+    backgroundColor: "transparent",
+    maxWidth: 500,
+  },
+
+  verifiedCustdMdlPinInputContainerText: {
+    color: "#5B5D6E",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 14 * 1.5
+  },
+
+  verifiedCustdMdlStButtonText: {
+    color: "#0c0c0e",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 24, // 16 * 1.5
+  },
+
+  verifiedCustdMdlStartupSlider: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 4,
+    width: "100%",
+  },
+
+  verifiedCustdMdlStartupSliderLine: {
+    height: 4,
+    flexShrink: 0,
+    borderRadius: 8,
+    backgroundColor: "#eeeef0",
+  },
+
+  verifiedCustdMdlStartupSliderLineActive: {
+    height: 4,
+    flex: 1,
+    borderRadius: 8,
+    backgroundColor: "#603ff4",
+  },
+
+  verifiedCustdMdlStartupContact: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 20,
+    width: "100%",
+  },
+
+  verifiedCustdMdlStartupContactContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlStartupContactText: {
+    color: "#0c0c0e",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 16, // 100%
+    alignSelf: "stretch",
+    maxWidth: "100%",
+  },
+
+  // verifiedCustdMdlStContactContentContainer: {
+  //   display: "flex",
+  //   alignItems: "flex-start",
+  //   gap: 8,
+  //   width: "100%",
+  // },
+
+  verifiedCustdMdlStContactSecondSection: {
+    display: "flex",
+    width: "100%",
+    height: 44,
+    paddingLeft: 6,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#f7f7f8",
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+  },
+
+  verifiedCustdMdlStContactSecondSectionPlaceholder: {
+    color: "#b6b7c3",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+  },
+
+  verifiedCustdMdlStartupContactFooter: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    marginTop: 16,
+  },
+
+  // verifiedCustdMdlStContactFooterFirstSection: {
+  //   display: "flex",
+  //   flexDirection: "column",
+  //   alignItems: "center",
+  //   justifyContent: "center",
+  //   gap: 12,
+  //   width: "100%",
+  // },
+
+  // verifiedCustdMdlStContactFooterSecondSection: {
+  //   display: "flex",
+  //   alignItems: "center",
+  //   justifyContent: "center",
+  //   gap: 4,
+  //   width: "100%",
+  // },
+
+  verifiedCustdMdlStContactInputError: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  verifiedCustdMdlInputErrorText: {
+    color: "#e23636",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 16.8, // 140%
+    margin: 0,
+  },
+
+  verifiedCustdMdlMobileStartupSearchBoxContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+    width: "100%",
+  },
+
+  verifiedCustdMdlMobileStartupSearchBox: {
+    display: "flex",
+    height: 40,
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#d8d9df",
+    backgroundColor: "#f7f7f8",
+    width: "100%",
+    overflow: "hidden", // only works with ScrollView or certain View types
+  },
+
+  verifiedCustdMdlMsSearchBoxContent: {
+    height: "100%",
+    width: "100%",
+    backgroundColor: "transparent",
+    color: "#0c0c0e",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+  },
+
+  verifiedCustdMdlMsSearchBoxContentPlaceholder: {
+    color: "#8f91a1",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+  },
+
+  verifiedCustdMdlMobileStartupSearchContent: {
+    display: "flex",
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#f7f7f8",
+    backgroundColor: "#ffffff",
+  },
+
+  verifiedCustdMdlMsSearchContentContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    overflow: "scroll", // or use ScrollView for better scroll control
+  },
+
+  verifiedCustdMdlMsSearchContent: {
+    display: "flex",
+    padding: 8,
+    alignItems: "center",
+    gap: 19,
+    alignSelf: "stretch",
+    height: 34,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+
+  verifiedCustdMdlMsSearchContentActive: {
+    display: "flex",
+    padding: 8,
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderRadius: 6,
+    backgroundColor: "#f1f8ed",
+  },
+
+  verifiedCustdMdlMsSearchContentTextContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: 19,
+  },
+
+  verifiedCustdMdlMsSearchContentIcon: {
+    display: "flex",
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.05)",
+    backgroundColor: "#fff",
+    shadowColor: "#eee",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3, // for Android shadow
+  },
+
+  verifiedCustdMdlMsSearchContentText: {
+    color: "#0c0c0e",
+    fontFamily: "Roboto",
+    fontSize: 12.4, // 0.775rem
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18.6, // 12.4 * 1.5
+  },
+
+  verifiedCustdMdlTermsAndCondition: {
+    color: "#8f91a1",
+    fontFamily: "Roboto",
+    fontSize: 11.2,
+    fontStyle: "normal",
+    fontWeight: "450",
+    lineHeight: 15.68, // 11.2 * 1.4
+  },
+
+  verifiedCustdMdlPrivacy: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 20,
+  },
+
+  verifiedCustdMdlPrivacyText: {
+    color: "#40414c",
+    fontFamily: "Roboto",
+    fontSize: 8,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 20,
+    letterSpacing: 0.25,
+  },
+
+  verifiedCustdMdlPPPaymentPortalAmountInfoSeparator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "stretch",
+    justifyContent: "center",
+  },
+
+  verifiedCustdMdlPPPaymentPortalLine: {
+    width: "50%",
+    height: 1,
+    backgroundColor: "#eeeef0",
+  },
+
+  verifiedCustdMdlPPaymentPortalSeparatorText: {
+    color: "#4a4a5a",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 16.8, // 140%
+    opacity: 0.6,
+  },
+
+  verifiedCustdMdlStartupOtpFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    width: "100%",
+    overflow: "hidden",
+  },
+
+  verifiedCustdMdlStartupOtpFooterText: {
+    color: "#0c0c0e",
+    fontFamily: "Manrope",
+    fontSize: 12.8,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 12.8, // 100%
+    maxWidth: "100%",
+  },
+
+  verifiedCustdMdlOtpInputContainer: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+    width: "100%",
+  },
+
+  verifiedCustdMdlGeneralWebToastError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  verifiedCustdMdlGeneralWebToastErrorContainer: {
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 6,
+  },
+
+  verifiedCustdMdlGeneralWebToastErrorTitle: {
+    margin: 0,
+    color: "#0c0c0e",
+    fontFamily: "Manrope",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 16, // 100%
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlGeneralWebToastErrorLabel: {
+    alignSelf: "stretch",
+    color: "#8f91a1",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+    margin: 0,
+  },
+
+  verifiedCustdMdlGeneralWebToastSuccess: {
+    padding: 12,
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#f1f8ed",
+    width: "100%",
+    height: 55,
+    maxHeight: 55,
+    flexDirection: "row",
+  },
+
+  verifiedCustdMdlGeneralWebToastSuccessCont: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+  },
+
+  verifiedCustdMdlGeneralWebToastSuccessContainer: {
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 6,
+  },
+
+  verifiedCustdMdlGeneralWebToastSuccessLink: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  verifiedCustdMdlGeneralWebToastSuccessLinkText: {
+    color: "#603ff4",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 21, // 150%
+    textDecorationLine: "underline",
+  },
+
+  verifiedCustdMdlSuccessPopupContentContainer: {
+    width: "28.4375%",
+    padding: 24,
+    flexDirection: "column",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 19,
+    elevation: 5,
+    height: "100%",
+  },
+
+  verifiedCustdMdlSuccessPopupContent: {
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 32,
+  },
+
+  verifiedCustdMdlSuccessPopupContentText: {
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 12,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlSuccessPopupContentTextHeader: {
+    color: "#0c0c0e",
+    textAlign: "center",
+    fontFamily: "Manrope",
+    fontSize: 24,
+    fontStyle: "normal",
+    fontWeight: "800",
+    lineHeight: 33.6, // 140%
+  },
+
+  verifiedCustdMdlSuccessPopupContentTextFooter: {
+    color: "#5b5d6e",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 24, // 150%
+  },
+
+  verifiedCustdMdlAddCosignerBodyIcon: {
+    width: "90%",
+    maxWidth: "90%",
+    height: 250,
+    maxHeight: 250,
+  },
+
+  verifiedCustdMdlAddCosignerBody: {
+    padding: 10,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 8,
+    backgroundColor: "#ECEFFF",
+  },
+
+  verifiedCustdMdlAddCosignerBodyTextCont: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+  },
+
+  verifiedCustdMdlAddCosignerBodyTextIcon: {
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 24,
+    backgroundColor: "#C2C7FF",
+    width: 20,
+    height: 20,
+    overflow: "hidden",
+  },
+
+  verifiedCustdMdlAddCosignerBodyTextLabel: {
+    width: "76.1%",
+    color: "#5B5D6E",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 15, // 150%
+  },
+
+  verifiedCustdMdlAddCosignerBodyTextLabelBold: {
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 14, // 140%
+  },
+
+  verifiedCustdMdlAddCosignerButtonsCont: {
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    backgroundColor: "transparent",
+  },
+
+  verifiedCustdMdlAddCosignerButtonNeut: {
+    width: "45%",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#0C0C0E",
+    color: "#0C0C0E",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 18, // 150%
+  },
+
+  verifiedCustdMdlAddCosignerButtonAction: {
+    width: "45%",
+    padding: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#CFE600",
+    borderWidth: 0,
+    color: "#0C0C0E",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 18, // 150%
+  },
+
+  verifiedCustdMdlAddCosignerMoreBody: {
+    padding: 15,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 8,
+    backgroundColor: "#ECEFFF",
+  },
+
+  verifiedCustdMdlAddCosignerMoreHeaderCont: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 32,
+  },
+
+  verifiedCustdMdlAddCosignerMoreTitleCont: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlAddCosignerHeaderText: {
+    alignSelf: "stretch",
+    color: "#5B5D6E",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18, // 12 * 1.5
+    margin: 0,
+  },
+
+  verifiedCustdMdlAddCosignerMoreTitle: {
+    color: "#0C0C0E",
+    fontFamily: "Manrope",
+    fontSize: 18,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 21.6, // 18 * 1.2
+    margin: 0,
+  },
+
+  verifiedCustdMdlAddCosignerMoreLabel: {
+    color: "#4A4A5A",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 14 * 1.5
+  },
+
+  verifiedCustdMdlAddCosignerMoreLabelLink: {
+    alignSelf: "stretch",
+    color: "#4E2BD7",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 18, // 12 * 1.5
+    textDecorationLine: "underline",
+    // textDecorationStyle: "solid", // not supported
+    // textDecorationThickness: "auto", // not supported
+    // textDecorationSkipInk: "none", // not supported
+    // textUnderlineOffset: "auto", // not supported
+    // textUnderlinePosition: "from-font", // not supported
+    // cursor: "pointer",
+    margin: 0,
+  },
+
+  verifiedCustdMdlAddCosignerHeaderInfoCont: {
+    padding: 10,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#FFF9C1",
+  },
+
+  verifiedCustdMdlAddCosignerHeaderInfoText: {
+    color: "#89490A",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 15, // 10 * 1.5
+  },
+
+  verifiedCustdMdlAddCosignerHeaderInfoTextBold: {
+    color: "#89490A",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 14, // 10 * 1.4
+  },
+
+  verifiedCustdMdlAddCosignerStep2Body: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 20,
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyHeader: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyHeaderFirstText: {
+    color: "#0C0C0E",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 12.8, // 0.8rem
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.2, // 12.8 * 1.5
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyHeaderSecondText: {
+    color: "#0C0C0E",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContent: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+    width: "100%",
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentHeader: {
+    paddingTop: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "column",
+    position: "relative",
+    width: "100%",
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentHeaderCont: {
+    width: "100%",
+    padding: 12,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabel: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    alignItems: "flex-start",
+    gap: 10,
+    position: "absolute",
+    left: 12,
+    top: -14,
+    borderRadius: 6,
+    backgroundColor: "#DDE1FF",
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentHeaderLabelText: {
+    color: "#362689",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 14, // 10 * 1.4
+    margin: 0,
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentHeaderBody: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EEEEF0",
+    backgroundColor: "#F7F7F8",
+    padding: 12,
+    alignItems: "flex-start",
+    gap: 16,
+    position: "relative",
+  },
+
+  verifiedCustdMdlAC2BContentHeaderBodyHeaderCont: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+  },
+
+  verifiedCustdMdlAC2BContentHeaderBodyHeader: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+    width: "100%",
+  },
+
+  verifiedCustdMdlAC2BContentHeaderBodyTitle: {
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 24, // 16 * 1.5
+    margin: 0,
+    maxWidth: 150,
+    // wordWrap: "break-word", // Not supported in React Native
+  },
+
+  verifiedCustdMdlAC2BContentHeaderBodyLabel: {
+    color: "#8F91A1",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 12 * 1.4
+    margin: 0,
+    maxWidth: 200,
+    // wordWrap: "break-word",
+  },
+
+  verifiedCustdMdlAC2BContentHeaderBodyButton: {
+    flexDirection: "row",
+    paddingVertical: 5.5,
+    paddingHorizontal: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#603FF4",
+    backgroundColor: "#603FF4",
+    color: "#ECEFFF",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 19.6, // 14 * 1.4
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    // cursor: "pointer" // Not supported
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentFooterText: {
+    color: "#603FF4",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 21, // 14 * 1.5
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreBody: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    padding: 15,
+    gap: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D8D9DF",
+    minWidth: "90%",
+    marginBottom: 20,
+    width: "100%",
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreFirst: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    width: "100%",
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreFirstHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 5,
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreFirstHeaderText: {
+    color: "#0C0C0E",
+    fontFamily: "Roboto",
+    fontSize: 11.2, // 0.7rem
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 16.8, // 11.2 * 1.5
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreFirstFooter: {
+    flexDirection: "row",
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 6,
+    backgroundColor: "#DDE1FF",
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreFirstFooterText: {
+    color: "#362689",
+    fontFamily: "Roboto",
+    fontSize: 10,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 14, // 10 * 1.4
+    margin: 0,
+  },
+
+  verifiedCustdMdlAddCosignerStep2AddMoreSecond: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    width: "100%",
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreSecondInput: {
+    display: "flex",
+    padding: 12,
+    alignItems: "center",
+    gap: 182,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#F7F7F8", // var(--Neutral-50)
+    color: "#0C0C0E", // var(--Neutral-950)
+
+    // Paragraph 02/P1
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18, // 150% of 12px ~ 18px
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreThird: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 24,
+    width: "100%",
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreThirdCont: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreThirdContText: {
+    color: "#383842", // var(--Neutral-900)
+
+    // Paragraph 02/P1
+    fontFamily: "Roboto",
+    fontSize: 13,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 20, // 150% of 13px ~ 19.5px
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreButtons: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 16,
+    alignSelf: "stretch",
+    width: "100%",
+    backgroundColor: "transparent",
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreButtonsNeut: {
+    width: "50%",
+    display: "flex",
+    paddingVertical: 7.5,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 0,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#603FF4", // var(--secondary-electric-violet-600)
+    color: "#603FF4",
+    textAlign: "right",
+
+    // Paragraph 02/P2
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 20, // 140% of 14px ~ 19.6px
+    backgroundColor: "transparent",
+    cursor: "pointer",
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreButtonsAction: {
+    width: "50%",
+    display: "flex",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 0,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#603FF4", // var(--secondary-electric-violet-600)
+    backgroundColor: "#603FF4",
+    color: "#ECEFFF", // var(--secondary-electric-violet-50)
+    textAlign: "right",
+
+    // Paragraph 02/P2
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 20, // 140% of 14px ~ 19.6px
+    cursor: "pointer",
+  },
+  verifiedCustdMdlAddCosignerStep2AddMoreSecondInputPlaceholder: {
+    color: "#B6B7C3", // var(--Neutral-300)
+
+    // Paragraph 02/P1
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18, // 150% of 12px
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyContent: {
+    display: "flex",
+    paddingTop: 20,
+    paddingBottom: 20,
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    gap: 61,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    backgroundColor: "#FFFFFF", // var(--Neutral-White-100)
+    width: "100%",
+    maxHeight: "62.7%",
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyCont: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 16,
+    width: "90%",
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyHeader: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 16,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyTitle: {
+    color: "#0C0C0E", // var(--Neutral-950)
+    fontFamily: "Manrope",
+    fontSize: 16,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 24, // 150% of 16px
+    margin: 0,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyLabel: {
+    color: "#5B5D6E", // var(--Neutral-600)
+
+    // Paragraph 01/P1
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18, // 150% of 12px
+    margin: 0,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooter: {
+    display: "flex",
+    width: "90%",
+    paddingTop: 15,
+    paddingBottom: 5,
+    paddingHorizontal: 15,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#EEEEF0", // var(--Neutral-100)
+    backgroundColor: "#FFFFFF", // var(--Neutral-White-100)
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterIndCont: {
+    display: "flex",
+    width: "100%",
+    flexDirection: "row",
+    backgroundColor: "transparent",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterInd: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: -6,
+    borderRadius: 2,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterIndTextCont: {
+    display: "flex",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 6,
+    backgroundColor: "#603FF4", // var(--secondary-electric-violet-600)
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterIndText: {
+    color: "#FFFFFF", // var(--Neutral-White-100)
+    textAlign: "center",
+
+    // Paragraph 03/P2
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 17, // 140% of 12px
+    margin: 0,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterIndIcon: {
+    width: 12,
+    height: 12,
+  },
+
+  verifiedCustdMdlPrivacyIcon: {
+    width: 20,
+    height: 20,
+  },
+
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelCont: {
+    width: "100%",
+    height: 51,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderCont: {
+    width: "98%",
+    height: 16,
+    flexShrink: 0,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSlider: {
+    width: "100%",
+    height: 5,
+    flexShrink: 0,
+    borderRadius: 10,
+    backgroundColor: "#EEEEF0", // var(--Neutral-100)
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderInd: {
+    height: 5,
+    flexShrink: 0,
+    borderRadius: 10,
+    backgroundColor: "#603FF4", // var(--secondary-electric-violet-600)
+    position: "relative",
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelSliderIcon: {
+    flexShrink: 0,
+    position: "absolute",
+    top: -5,
+    right: 0,
+    width: 16,
+    height: 16,
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelTextCont: {
+    display: "flex",
+    width: "100%",
+    paddingVertical: 10,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  verifiedCustdMdlAddCosignerConfirmBodyFooterLabelText: {
+    color: "#0C0C0E", // var(--Neutral-950)
+
+    // Paragraph 02/P2
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 17, // 140% of 12px
+    margin: 0,
+    cursor: "pointer",
+  },
+  verifiedCustdMdlAC2BContentHeaderBodyHeaderIcons: {
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 16,
+    marginTop: 10,
+  },
+  verifiedCustdMdlAddCosignerStep2BodyContentFooterDis: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 18,
+  },
+
+  verifiedCustdMdlAddCosignerStep2BodyContentFooterTextDis: {
+    color: "#B6B7C3",
+    textAlign: "right",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "500",
+    lineHeight: 21,
+  },
+
+  verifiedCustdMdlStartupContactContentHeaderCont: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    display: "flex",
+  },
+
+  verifiedCustdMdlAddCosignerConfirmBodyContentOutter: {
+    backgroundColor: "rgba(0, 0, 0, 0.40)",
+    zIndex: 5,
+    position: "absolute",
+    width: "100%",
+    bottom: 0,
+    right: 0,
+    left: 0,
+    height: "100%",
+    display: "flex",
+    flexDirection: "column-reverse",
+  },
+
+  verifiedCustdMdlPortfolioPageContentHeaderButton: {
+    display: "flex",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 32,
+    backgroundColor: "#362689", // Electric Violet 900
+    cursor: "pointer",
+    color: "#FFFFFF",
+    borderWidth: 0,
+    width: "auto",
+    maxWidth: 150,
+    fontFamily: "Roboto",
+    fontSize: 10.4, // 0.65rem ≈ 10.4px
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 14.56, // 140%
+    height: 30,
+    flexWrap: "wrap",
+  },
+
+  verifiedCustdMdlPortfolioPageContentHeaderButtonCont: {
+    width: "auto",
+    height: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    justifyContent: "flex-start",
+    position: "relative",
+  },
+
+  verifiedCustdMdlPortfolioPageContentHeaderButtonBody: {
+    height: "auto",
+    width: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    borderWidth: 0,
+    borderRadius: 10,
+    backgroundColor: "#F7F7F8",
+    padding: 10,
+    position: "absolute",
+    top: 33,
+    right: 0,
+  },
+
+  verifiedCustdMdlPortfolioPageContentHeaderButtonBodyCont: {
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    borderWidth: 1,
+    borderColor: "transparent",
+    padding: 5,
+  },
+
+  verifiedCustdMdlPortfolioPageContentHeaderButtonBodyText: {
+    width: 110,
+    fontFamily: "Roboto",
+    fontSize: 10.4,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 14.56,
+    flexWrap: "wrap",
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdButton: {
+    display: "flex",
+    width: 100,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: "#4e2bd7",
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdButtonText: {
+    color: "#603ff4",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "600",
+    lineHeight: 17.5, // 125%
+  },
+
+  verifiedCustdMdlProfilePopupContentThird: {
+    display: "flex",
+    padding: 12,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    // Shadow Nav 1
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdContainer: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 12,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdContent: {
+    display: "flex",
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdContentTextContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdContentText: {
+    color: "#383842",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 21, // 150%
+    maxWidth: 170,
+    flexWrap: "wrap",
+  },
+
+  verifiedCustdMdlProfilePopupContentThirdContentLine: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#EEEEF0",
+  },
+
+  verifiedCustdMdlProfilePopupContent: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 16,
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlAssetLayoutContent: {
+    display: "flex",
+    paddingTop: 0,
+    paddingBottom: 155,
+    paddingHorizontal: 20,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 20,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    width: "100%",
+    height: "100%",
+  },
+
+  verifiedCustdMdlProfilePopupContentSecond: {
+    display: "flex",
+    padding: 12,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 12,
+    alignSelf: "stretch",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+
+  verifiedCustdMdlProfilePopupContentSecondText: {
+    color: "#383842",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: "700",
+    lineHeight: 21,
+  },
+
+  verifiedCustdMdlProfilePopupContentSecondContainer: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+
+  verifiedCustdMdlProfilePopupContentSecondContent: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 24,
+    cursor: "pointer",
+  },
+
+  verifiedCustdMdlProfilePopupContentSecondContentIcon: {
+    display: "flex",
+    padding: 12,
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 4,
+    backgroundColor: "#ECEFFF",
+  },
+
+  verifiedCustdMdlProfilePopupContentSecondContentText: {
+    color: "#000000",
+    textAlign: "center",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 18,
+    textTransform: "capitalize",
+    width: "auto",
+    maxWidth: 60,
+    height: 36,
+  },
+
+  VerifiedCustdMdlOfferSecurityPopupInfoContentGrad: {
+    display: "flex",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
+    top: -1,
+    left: 4,
+    width: 230,
+    borderRadius: 2,
+    zIndex: 3,
+    // <LinearGradient> equivalent gradient can go here
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+
+  verifiedCustdMdlOfferSecurityPopupInfoContentText: {
+    color: "#383842",
+    width: "auto",
+    maxWidth: 300,
+    height: "auto",
+    flexWrap: "wrap",
+    fontFamily: "Roboto",
+    fontSize: 12,
+    fontStyle: "normal",
+    fontWeight: "400",
+    lineHeight: 16.8,
+  },
+};

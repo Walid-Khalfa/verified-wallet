@@ -1,0 +1,599 @@
+import { initPlatform, getPlatformComponents } from "./platform";
+import React, { useEffect, useState } from "react";
+import { useVaultStore, VaultContextProvider } from "../services/store";
+import { VerifiedCustodyProps, VerifiedWalletVault } from "../utils/types";
+import FTUPage from "./ftu";
+import EnterPinPage from "./enterPin";
+import {
+  hashTheString,
+  initWalletAndContract,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+} from "../utils/helpers";
+import { actionTexts, countriesDetails, imageAssets } from "../utils/constants";
+import AddCosignersPage from "./addCosigners";
+import Success from "../components/success";
+import CreatePinPage from "./createPin";
+
+const VerifiedCustody = (props: VerifiedCustodyProps) => {
+  const [ready, setReady] = useState<boolean>(false);
+  const [platformComponents, setPlatformComponents] = useState<any>({});
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(false);
+  const [isOnboard, setisOnboard] = useState<boolean | null>(null);
+  const [vaultData, setVaultData] = useState<VerifiedWalletVault>({});
+  const [_vaultData, _setVaultData] = useState<any>({});
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showDashboard, setShowDasboard] = useState<boolean>(false);
+  const [showCompleteVault, setShowCompleteVault] = useState<boolean>(false);
+  const [showResetPin, setShowResetPin] = useState<boolean>(false);
+  const [showRemoveCosigner, setShowRemoveCosigner] = useState<boolean>(false);
+  const [action, setAction] = useState<string>("");
+  const [allCountries, setAllCountries] = useState([]);
+  const [step, setStep] = useState<string>("");
+  const [selectedCountry, setSelectedCountry] = useState(
+    props.defaultCountry || {
+      area: "1",
+      flag: imageAssets.usaFlag,
+      name: "United States",
+    }
+  );
+  const [userNumberFmt, setUserNumberFmt] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  useEffect(() => {
+    const loadModule = async () => {
+      await initPlatform();
+      const components = getPlatformComponents();
+      if (components) {
+        setPlatformComponents(components);
+        setReady(true);
+      }
+    };
+    loadModule();
+  }, []);
+
+  const {
+    isReactNative,
+    View,
+    Text,
+    Font,
+    AsyncStorage,
+    ActivityIndicator,
+    styles,
+  } = platformComponents;
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else if (Font) {
+        //load fonts with expo-font for react native.
+        await loadAllGoogleFontsRN(Font);
+        setFontsLoaded(true);
+      } else {
+        setFontsLoaded(true);
+      }
+    };
+    if (!fontsLoaded && ready) {
+      PreloadGoogleFonts();
+    }
+  }, [ready, fontsLoaded]);
+
+  useEffect(() => {
+    const checkUserOnboardingStatus = async () => {
+      if (!isReactNative) {
+        // On web we use chrome extension storage or localStorage
+        if (chrome?.storage?.local) {
+          chrome.storage.local.get("myVault", (res) => {
+            if (res.myVault && JSON.parse(res.myVault)?.vaultId) {
+              setVaultData(JSON.parse(res.myVault));
+              setisOnboard(true);
+            } else {
+              setisOnboard(false);
+            }
+          });
+        } else if (localStorage) {
+          const myVault = JSON.parse(localStorage.getItem("myVault"));
+          if (myVault && myVault?.vaultId) {
+            setVaultData(myVault);
+            setisOnboard(true);
+          } else setisOnboard(false);
+        } else {
+          setisOnboard(false);
+        }
+      } else if (AsyncStorage) {
+        try {
+          // On react native we use react-native-async-storage
+          const storedVault = await AsyncStorage.getItem("myVault");
+          if (storedVault) {
+            const myVault = JSON.parse(storedVault);
+            if (myVault?.vaultId) {
+              setVaultData(myVault);
+              setisOnboard(true);
+              return;
+            }
+          }
+          setisOnboard(false);
+        } catch (err) {
+          console.error("Error reading vault data on react:", err);
+          setisOnboard(false);
+        }
+      }
+    };
+
+    if (ready) {
+      checkUserOnboardingStatus();
+    }
+  }, [ready]);
+
+  useEffect(() => {
+    const getAndFormatAllCountries = () => {
+      const fmtCountries = countriesDetails //use api instead???
+        .map((cnt) => {
+          if (cnt) {
+            return {
+              name: cnt?.name,
+              countryName: cnt?.name,
+              officialName: cnt?.name,
+              currencySymbol: cnt?.currency,
+              currencyName: cnt?.currency,
+              officialCurrencySymbol: cnt?.currency,
+              countryCode: cnt?.code,
+              flag: cnt?.flag,
+              continent: cnt?.continent,
+              phone_code: cnt?.phone_code,
+              code: cnt?.code,
+            };
+          }
+          return null;
+        })
+        .filter((cnt) => cnt !== undefined && cnt !== null);
+      setAllCountries(fmtCountries);
+    };
+    getAndFormatAllCountries();
+  }, []);
+
+  return (
+    <React.Fragment>
+      {ready && (
+        <React.Fragment>
+          {fontsLoaded && (
+            <VaultContextProvider>
+              {isLoading && (
+                <View
+                  style={
+                    isReactNative
+                      ? {
+                          ...styles.verifiedCustdMdlLoadingScreen,
+                          height: "100vh",
+                        }
+                      : { height: "100vh" }
+                  }
+                  className="verified-custd-mdl-loading-screen"
+                >
+                  <ActivityIndicator size="large" color="blue" />
+                </View>
+              )}
+              <View
+                id="verified-custd-out-cont"
+                className="verified-custd-mdl-container"
+                style={
+                  isReactNative ? { ...styles.verifiedCustdMdlContainer } : {}
+                }
+              >
+                {isOnboard === null && props.delayPageElement && (
+                  <React.Fragment>{props.delayPageElement}</React.Fragment>
+                )}
+
+                {isOnboard === null && !props.delayPageElement && (
+                  <View
+                    style={
+                      props.delayPageStyle
+                        ? props.delayPageStyle
+                        : {
+                            width: "100%",
+                            height: "100%",
+                            background: "transparent",
+                            border: "none",
+                          }
+                    }
+                  >
+                    {" "}
+                  </View>
+                )}
+
+                {isOnboard !== null && (
+                  <React.Fragment>
+                    {!isOnboard && !showDashboard && (
+                      <FTUPage
+                        platform={platformComponents}
+                        fontsLoaded={fontsLoaded}
+                        helperFunctions={props.helperFunctions}
+                        popupView={props.popupView}
+                        action={props.action ? props.action : "getPk"}
+                        vaultData={
+                          props.reqVaultData
+                            ? {
+                                vaultId: decodeURIComponent(
+                                  props.reqVaultData?.vId ||
+                                    props.reqVaultData?.vaultId
+                                ),
+                                hashedVaultId: hashTheString(
+                                  decodeURIComponent(
+                                    props.reqVaultData?.vId ||
+                                      props.reqVaultData?.vaultId
+                                  )
+                                ),
+                                hashedVaultPin: decodeURIComponent(
+                                  props.reqVaultData?.vPh ||
+                                    props.reqVaultData?.hashedVaultPin
+                                ),
+                                coSignerId: decodeURIComponent(
+                                  props.reqVaultData?.cId
+                                ),
+                              }
+                            : null
+                        }
+                        txData={
+                          props.txData
+                            ? Object.keys(props.txData)?.map((ky) => {
+                                props.txData[ky] = decodeURIComponent(
+                                  props.txData[ky]
+                                );
+                                return props.txData;
+                              })[Object.keys(props.txData)?.length - 1]
+                            : null
+                        }
+                        showLogoPage={props.showLogoPage}
+                        logoPageElement={props.logoPageElement}
+                        logoTimeoutTime={props.logoTimeoutTime}
+                        defaultCountry={props.defaultCountry}
+                        setisOnboard={setisOnboard}
+                        setIsLoading={setIsLoading}
+                        dashbordElement={props.dashbordElement}
+                        chainId={Number(props.chainId)}
+                        enablePhone={props.enablePhone}
+                        setShowDashboard={setShowDasboard}
+                        setShowResetPin={setShowResetPin}
+                        setShowRemoveCosigner={setShowRemoveCosigner}
+                        rootTagId={props.rootTagId}
+                        rootExpandedWidth={props.rootExpandedWidth}
+                        rootExpandedHeight={props.rootExpandedHeight}
+                        createPasskeyDomain={props?.createPasskeyDomain}
+                        getPasskeyDomain={props?.getPasskeyDomain}
+                      />
+                    )}
+
+                    {isOnboard && !showDashboard && !showCompleteVault && (
+                      <EnterPinPage
+                        platform={platformComponents}
+                        fontsLoaded={fontsLoaded}
+                        setisOnboard={setisOnboard}
+                        vaultId={vaultData?.vaultId}
+                        hashedVaultId={vaultData?.hashedVaultId}
+                        encrptedPk={vaultData?.pk}
+                        vaultAddress={vaultData?.address}
+                        vaultChannel={vaultData?.channel}
+                        regAddress={vaultData?.regAddress}
+                        origin={props.origin}
+                        title={props.title}
+                        actionText={
+                          props.actionText || actionTexts[props.action]
+                        }
+                        setIsLoading={setIsLoading}
+                        newChainId={Number(props.chainId)}
+                        action={props.action || ""}
+                        reqVaultData={
+                          props.reqVaultData
+                            ? {
+                                vaultId: decodeURIComponent(
+                                  props.reqVaultData?.vId ||
+                                    props.reqVaultData?.vaultId
+                                ),
+                                hashedVaultId: hashTheString(
+                                  decodeURIComponent(
+                                    props.reqVaultData?.vId ||
+                                      props.reqVaultData?.vaultId
+                                  )
+                                ),
+                                hashedVaultPin: decodeURIComponent(
+                                  props.reqVaultData?.vPh ||
+                                    props.reqVaultData?.hashedVaultPin
+                                ),
+                                coSignerId: decodeURIComponent(
+                                  props.reqVaultData?.cId
+                                ),
+                              }
+                            : null
+                        }
+                        reqTxData={
+                          props.txData
+                            ? Object.keys(props.txData)?.map((ky) => {
+                                props.txData[ky] = decodeURIComponent(
+                                  props.txData[ky]
+                                );
+                                return props.txData;
+                              })[Object.keys(props.txData)?.length - 1]
+                            : null
+                        }
+                        txToSign={props.txToSign || null}
+                        signTxElement={props.signTxElement}
+                        helperFunctions={props.helperFunctions}
+                        setShowDashboard={setShowDasboard}
+                        setShowResetPin={setShowResetPin}
+                        setShowRemoveCosigner={setShowRemoveCosigner}
+                        setShowCompleteVault={setShowCompleteVault}
+                        setUserEmail={setUserEmail}
+                        setUserNumberFmt={setUserNumberFmt}
+                        setSelectedCountry={setSelectedCountry}
+                        enablePhone={props.enablePhone}
+                        dashbordElement={props.dashbordElement}
+                        rootTagId={props.rootTagId}
+                        rootExpandedWidth={props.rootExpandedWidth}
+                        rootExpandedHeight={props.rootExpandedHeight}
+                        createPasskeyDomain={props?.createPasskeyDomain}
+                        getPasskeyDomain={props?.getPasskeyDomain}
+                      />
+                    )}
+
+                    {isOnboard && showDashboard && showCompleteVault && (
+                      <EnterPinPage
+                        platform={platformComponents}
+                        fontsLoaded={fontsLoaded}
+                        setisOnboard={setisOnboard}
+                        vaultId={vaultData?.vaultId}
+                        hashedVaultId={vaultData?.hashedVaultId}
+                        encrptedPk={vaultData?.pk}
+                        vaultAddress={vaultData?.address}
+                        regAddress={vaultData?.regAddress}
+                        vaultChannel={vaultData?.channel}
+                        origin={props.origin}
+                        title={props.title}
+                        actionText={
+                          props.actionText || actionTexts[props.action]
+                        }
+                        setIsLoading={setIsLoading}
+                        newChainId={Number(props.chainId)}
+                        action={props.action || ""}
+                        reqVaultData={
+                          props.reqVaultData
+                            ? {
+                                vaultId: decodeURIComponent(
+                                  props.reqVaultData?.vId ||
+                                    props.reqVaultData?.vaultId
+                                ),
+                                hashedVaultId: hashTheString(
+                                  decodeURIComponent(
+                                    props.reqVaultData?.vId ||
+                                      props.reqVaultData?.vaultId
+                                  )
+                                ),
+                                hashedVaultPin: decodeURIComponent(
+                                  props.reqVaultData?.vPh ||
+                                    props.reqVaultData?.hashedVaultPin
+                                ),
+                                coSignerId: decodeURIComponent(
+                                  props.reqVaultData?.cId
+                                ),
+                              }
+                            : null
+                        }
+                        reqTxData={
+                          props.txData
+                            ? Object.keys(props.txData)?.map((ky) => {
+                                props.txData[ky] = decodeURIComponent(
+                                  props.txData[ky]
+                                );
+                                return props.txData;
+                              })[Object.keys(props.txData)?.length - 1]
+                            : null
+                        }
+                        txToSign={props.txToSign || null}
+                        signTxElement={props.signTxElement}
+                        helperFunctions={props.helperFunctions}
+                        setShowDashboard={setShowDasboard}
+                        setShowResetPin={setShowResetPin}
+                        setShowRemoveCosigner={setShowRemoveCosigner}
+                        setShowCompleteVault={setShowCompleteVault}
+                        setUserEmail={setUserEmail}
+                        setUserNumberFmt={setUserNumberFmt}
+                        setSelectedCountry={setSelectedCountry}
+                        enablePhone={props.enablePhone}
+                        dashbordElement={props.dashbordElement}
+                        rootTagId={props.rootTagId}
+                        rootExpandedWidth={props.rootExpandedWidth}
+                        rootExpandedHeight={props.rootExpandedHeight}
+                        createPasskeyDomain={props?.createPasskeyDomain}
+                        getPasskeyDomain={props?.getPasskeyDomain}
+                      />
+                    )}
+
+                    {isOnboard &&
+                      !showDashboard &&
+                      showCompleteVault &&
+                      step === "" && (
+                        <View
+                          style={{
+                            width: "100%",
+                            heigth: "100%",
+                            padding: "20px",
+                          }}
+                        >
+                          <AddCosignersPage
+                            platform={platformComponents}
+                            fontsLoaded={fontsLoaded}
+                            setStep={setStep}
+                            setIsLoading={setIsLoading}
+                            userNumberFmt={userNumberFmt}
+                            userEmail={userEmail}
+                            selectedCountry={selectedCountry}
+                            allCountries={allCountries}
+                            helperFunctions={props.helperFunctions}
+                            enablePhone={props.enablePhone}
+                            dashbordElement={props.dashbordElement}
+                            setShowDashboard={setShowDasboard}
+                            setShowResetPin={setShowResetPin}
+                            setShowRemoveCosigner={setShowRemoveCosigner}
+                          />
+                        </View>
+                      )}
+
+                    {isOnboard &&
+                      !showDashboard &&
+                      showCompleteVault &&
+                      step === "7" && (
+                        <Success
+                          platform={platformComponents}
+                          action={props.action}
+                          setStep={setStep}
+                          stepToSet="8"
+                          customTextHeader="Successful"
+                          actionHeaderText="Successful"
+                          customTextFooter="Congratulations! You have successfully added Co-signers to your account."
+                          actionFooterText="Congratulations! You have successfully added Co-signers to your account."
+                          showButton={props.dashbordElement ? true : false}
+                          buttonText={
+                            props.dashbordElement ? "Go To Dashboard" : ""
+                          }
+                          handleShowDashboard={() => {
+                            setShowResetPin(false);
+                            setShowRemoveCosigner(false);
+                            setShowDasboard(true);
+                          }}
+                          buttonFunc={() => {
+                            setShowResetPin(false);
+                            setShowRemoveCosigner(false);
+                            setShowDasboard(true);
+                          }}
+                        />
+                      )}
+
+                    {isOnboard &&
+                      !showDashboard &&
+                      showCompleteVault &&
+                      step === "8" &&
+                      props.dashbordElement && (
+                        <props.dashbordElement setIsLoading={setIsLoading} />
+                      )}
+
+                    {isOnboard &&
+                      !showDashboard &&
+                      showCompleteVault &&
+                      step === "8" &&
+                      !props.dashbordElement && (
+                        <React.Fragment></React.Fragment>
+                      )}
+
+                    {!showCompleteVault &&
+                      showDashboard &&
+                      !showResetPin &&
+                      !showRemoveCosigner &&
+                      props.dashbordElement && (
+                        <props.dashbordElement
+                          setIsLoading={setIsLoading}
+                          setShowResetPin={setShowResetPin}
+                          setShowRemoveCosigner={setShowRemoveCosigner}
+                          setAction={setAction}
+                          setUserNumberFmt={setUserNumberFmt}
+                          setUserEmail={setUserEmail}
+                          setSelectedCountry={setSelectedCountry}
+                          setVaultData={_setVaultData}
+                          initWalletAndContract={initWalletAndContract}
+                          useVaultStore={useVaultStore}
+                        />
+                      )}
+
+                    {isOnboard &&
+                      !showCompleteVault &&
+                      showDashboard &&
+                      !showResetPin &&
+                      !showRemoveCosigner &&
+                      !props.dashbordElement && (
+                        <React.Fragment></React.Fragment>
+                      )}
+
+                    {isOnboard &&
+                      !showCompleteVault &&
+                      !showRemoveCosigner &&
+                      showDashboard &&
+                      showResetPin && (
+                        <View
+                          style={{
+                            width: "100%",
+                            heigth: "100%",
+                            padding: "20px",
+                          }}
+                        >
+                          <CreatePinPage
+                            platform={platformComponents}
+                            fontsLoaded={fontsLoaded}
+                            action="reset-pin"
+                            setStep={setStep}
+                            setIsLoading={setIsLoading}
+                            userNumberFmt={userNumberFmt}
+                            userEmail={userEmail}
+                            vaultData={_vaultData}
+                            selectedCountry={selectedCountry}
+                            helperFunctions={props.helperFunctions}
+                            isExistingUser={true}
+                            rootTagId={props.rootTagId}
+                            rootExpandedWidth={props.rootExpandedWidth}
+                            rootExpandedHeight={props.rootExpandedHeight}
+                            createPasskeyDomain={props?.createPasskeyDomain}
+                            getPasskeyDomain={props?.getPasskeyDomain}
+                          />
+                        </View>
+                      )}
+
+                    {isOnboard &&
+                      !showCompleteVault &&
+                      showDashboard &&
+                      !showResetPin &&
+                      showRemoveCosigner && (
+                        <View
+                          style={{
+                            width: "100%",
+                            heigth: "100%",
+                            padding: "20px",
+                          }}
+                        >
+                          <AddCosignersPage
+                            platform={platformComponents}
+                            fontsLoaded={fontsLoaded}
+                            action={"remove-cosigner"}
+                            setStep={setStep}
+                            setIsLoading={setIsLoading}
+                            userNumberFmt={userNumberFmt}
+                            userEmail={userEmail}
+                            selectedCountry={selectedCountry}
+                            allCountries={allCountries}
+                            helperFunctions={props.helperFunctions}
+                            enablePhone={props.enablePhone}
+                            dashbordElement={props.dashbordElement}
+                            setShowDashboard={setShowDasboard}
+                            setShowResetPin={setShowResetPin}
+                            setShowRemoveCosigner={setShowRemoveCosigner}
+                          />
+                        </View>
+                      )}
+                  </React.Fragment>
+                )}
+              </View>
+            </VaultContextProvider>
+          )}
+
+          {!fontsLoaded && <Text>Loading Module Fonts...</Text>}
+        </React.Fragment>
+      )}
+      {!ready &&
+        typeof navigator !== "undefined" &&
+        navigator.product !== "ReactNative" && (
+          <React.Fragment>Preparing Module...</React.Fragment>
+        )}
+    </React.Fragment>
+  );
+};
+
+export default VerifiedCustody;

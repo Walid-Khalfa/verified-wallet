@@ -1,0 +1,470 @@
+import React, { useEffect, useState } from "react";
+import { useVaultStore } from "../services/store";
+import {
+  errorToast,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+} from "../utils/helpers";
+import PageSlider from "../components/slider";
+import SearchBox from "../components/search";
+import { TermsAndConditionsOverlay } from "../components/overlays";
+import { imageAssets } from "../utils/constants";
+import { VerifiedCustodyHelpers } from "../utils/types";
+
+const ContactPage = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+    rnPasskey: any;
+  };
+  fontsLoaded?: boolean;
+  setStep: (step: string) => void;
+  setIsLoading: (isLoading: boolean) => void;
+  setUserNumberFmt: (number: string) => void;
+  userNumberFmt: string;
+  setUserEmail: (email: string) => void;
+  userEmail: string;
+  setSelectedCountry: (country: {
+    name: string;
+    area: string;
+    flag: string;
+  }) => void;
+  selectedCountry: { name: string; area: string; flag: string };
+  allCountries: any;
+  noContract?: boolean;
+  helperFunctions?: VerifiedCustodyHelpers;
+  enablePhone?: boolean;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+  } = props.platform;
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(
+    props.fontsLoaded || false
+  );
+  const [userNumber, setUserNumber] = useState("");
+  const [userInput, setUserInput] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const [sendOtpErrorText, setSendOtpErrorText] = useState("");
+
+  const [buttonActive, setButtonActive] = useState(false);
+  const { pk, vaultContract, address } = useVaultStore();
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else if (Font) {
+        //load fonts with expo-font for react native.
+        await loadAllGoogleFontsRN(Font);
+        setFontsLoaded(true);
+      } else {
+        setFontsLoaded(true);
+      }
+    };
+    if (!props.fontsLoaded) {
+      PreloadGoogleFonts();
+    }
+  }, []);
+
+  const handleButtonDisplay = () => {
+    if (props.selectedCountry.area && userNumber.length === 10) {
+      setSendOtpErrorText("");
+      setButtonActive(true);
+    } else if (
+      props.userEmail?.length > 0 &&
+      isNaN(Number(props.userEmail)) &&
+      props.userEmail.includes("@")
+    ) {
+      setSendOtpErrorText("");
+      setButtonActive(true);
+    } else {
+      setSendOtpErrorText("");
+      setButtonActive(false);
+    }
+  };
+
+  const handleSendOTP = async () => {
+    if (props.userEmail === "" && userNumber === "") {
+      setSendOtpErrorText("Invalid email or phone number. Try again later");
+      return;
+    }
+    if (!props.helperFunctions) {
+      setSendOtpErrorText("No Helper Functions provided.");
+      return;
+    }
+
+    if (
+      props.userEmail?.length > 0 &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(props.userEmail)
+    ) {
+      setSendOtpErrorText("Invalid email format.");
+      return;
+    }
+
+    const vaultId =
+      props.userEmail?.length > 0
+        ? props.userEmail
+        : `+${props.selectedCountry.area}${userNumber}`;
+    const channel = props.userEmail?.length > 0 ? "email" : "sms";
+
+    if (
+      (vaultId && channel && pk && vaultContract) ||
+      (vaultId && channel && props.noContract)
+    ) {
+      props.setIsLoading(true);
+      try {
+        const res = await props.helperFunctions.sendOTPVerification(
+          address,
+          channel,
+          vaultId
+        );
+        props.setIsLoading(false);
+        if (res) {
+          setSendOtpErrorText("");
+          props.setStep("3");
+        } else {
+          setSendOtpErrorText(
+            channel === "email"
+              ? "Error sending OTP to email. Try again."
+              : "Error sending OTP to phone. Try again."
+          );
+          errorToast(
+            "OTP Error",
+            channel === "email"
+              ? "Please enter a valid email."
+              : "Please enter a valid phone number."
+          );
+        }
+      } catch (err) {
+        props.setIsLoading(false);
+        setSendOtpErrorText("Unexpected error. Try again.");
+      }
+    } else {
+      if (!props.noContract) {
+        setSendOtpErrorText("Network error. Check your internet connection.");
+      }
+    }
+  };
+
+  return (
+    <ScrollView style={{ width: "100%", height: "100%" }}>
+      {fontsLoaded && (
+        <View
+          style={
+            isReactNative ? { ...styles.verifiedCustdMdlStartupLanguage } : {}
+          }
+          className="verified-custd-mdl-startup-language"
+        >
+          <View
+            style={
+              isReactNative ? { ...styles.verifiedCustdMdlStartupContact } : {}
+            }
+            className="verified-custd-mdl-startup-contact"
+          >
+            <PageSlider
+              platform={props.platform}
+              sliderCount={[1, 2, 3]}
+              currentSlider="0"
+            />
+
+            <View
+              style={
+                isReactNative
+                  ? { ...styles.verifiedCustdMdlStartupContactContent }
+                  : {}
+              }
+              className="verified-custd-mdl-startup-contact-content"
+            >
+              <Text
+                style={
+                  isReactNative
+                    ? { ...styles.verifiedCustdMdlStartupContactText }
+                    : {}
+                }
+                className="verified-custd-mdl-startup-contact-text"
+              >
+                {props.enablePhone
+                  ? "Enter your phone number"
+                  : "Enter your email address"}
+              </Text>
+
+              {props.enablePhone && (
+                <View
+                  style={
+                    isReactNative
+                      ? { ...styles.verifiedCustdMdlStContactInput }
+                      : {}
+                  }
+                  className="verified-custd-mdl-st-contact-input"
+                >
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlStContactContentContainer,
+                          }
+                        : {}
+                    }
+                    className="verified-custd-mdl-st-contact-content-container"
+                  >
+                    <TouchableOpacity
+                      onPress={() => setSearchActive(!searchActive)}
+                      className="verified-custd-mdl-st-contact-first-section"
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStContactFirstSection }
+                          : {}
+                      }
+                    >
+                      <Image
+                        source={{ uri: props.selectedCountry.flag }}
+                        alt="Country Flag"
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlStContactSelectionIcon,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-st-contact-selection-icon"
+                      />
+                      <Text
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlStContactSelectionText,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-st-contact-selection-text"
+                      >
+                        + {props.selectedCountry.area}
+                      </Text>
+                      <Image
+                        alt="Dropdown"
+                        className="verified-custd-mdl-st-contact-dropdown"
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStContactDropdown }
+                            : {}
+                        }
+                        source={
+                          searchActive
+                            ? { uri: imageAssets.arrowUp }
+                            : { uri: imageAssets.arrowDown }
+                        }
+                      />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      className="verified-custd-mdl-st-contact-second-section"
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStContactSecondSection }
+                          : {}
+                      }
+                      placeholder="Enter your phone number"
+                      placeholderTextColor="#b6b7c3"
+                      value={props.userNumberFmt}
+                      keyboardType="numeric"
+                      onChangeText={(text: string) => {
+                        const numericInput = text.replace(/\D/g, "");
+                        setUserInput(text);
+                        setUserNumber(numericInput);
+                        let formattedNumber = "";
+                        for (let i = 0; i < numericInput?.length; i++) {
+                          formattedNumber += numericInput[i];
+                          if (
+                            (i + 1) % 5 === 0 &&
+                            i + 1 < numericInput?.length
+                          ) {
+                            formattedNumber += " ";
+                          }
+                        }
+                        props.setUserNumberFmt(formattedNumber);
+                        handleButtonDisplay();
+                      }}
+                    />
+                  </View>
+
+                  {searchActive && (
+                    <SearchBox
+                      platform={props.platform}
+                      pageName="ftu/contact"
+                      searchContent={props.allCountries}
+                      type="area-code"
+                      handleButtonDisplay={handleButtonDisplay}
+                      setSelected={props.setSelectedCountry}
+                      selected={props.selectedCountry}
+                      searchActive={searchActive}
+                      setSearchActive={setSearchActive}
+                      contentMaxHeight="300"
+                      contentbottomMargin="300"
+                    />
+                  )}
+
+                  {userNumber.length !== 10 &&
+                    userInput.length > 10 &&
+                    !sendOtpErrorText && (
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlInputErrorText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-input-error-text"
+                      >
+                        Invalid input, please check your phone number
+                      </Text>
+                    )}
+                </View>
+              )}
+
+              {!searchActive && (
+                <React.Fragment>
+                  {props.enablePhone && (
+                    <View
+                      className="verified-custd-mdl-p-p-payment-portal-amount-info-separator"
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlPPPaymentPortalAmountInfoSeparator,
+                            }
+                          : {}
+                      }
+                    >
+                      <View
+                        className="verified-custd-mdl-p-p-payment-portal-line"
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlPPPaymentPortalLine }
+                            : {}
+                        }
+                      ></View>
+                      <Text
+                        className="verified-custd-mdl-p-payment-portal-separator-text"
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlPPaymentPortalSeparatorText,
+                              }
+                            : {}
+                        }
+                      >
+                        OR
+                      </Text>
+                      <View
+                        className="verified-custd-mdl-p-p-payment-portal-line"
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlPPPaymentPortalLine }
+                            : {}
+                        }
+                      ></View>
+                    </View>
+                  )}
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStContactInput }
+                        : {}
+                    }
+                    className="verified-custd-mdl-st-contact-input"
+                  >
+                    <TextInput
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStContactSecondSection }
+                          : {}
+                      }
+                      className="verified-custd-mdl-st-contact-second-section"
+                      placeholder="Enter your email address"
+                      placeholderTextColor="#b6b7c3"
+                      value={props.userEmail}
+                      onChangeText={(text: string) => {
+                        props.setUserEmail(text);
+                        props.setUserNumberFmt("");
+                        setUserNumber("");
+                        setUserInput("");
+                        handleButtonDisplay();
+                      }}
+                    />
+                    {sendOtpErrorText && props.userEmail.length > 0 && (
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlInputErrorText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-input-error-text"
+                      >
+                        {sendOtpErrorText}
+                      </Text>
+                    )}
+                  </View>
+                </React.Fragment>
+              )}
+            </View>
+
+            {!searchActive && <View style={{ height: "80px" }}></View>}
+
+            <View
+              style={
+                isReactNative
+                  ? { ...styles.verifiedCustdMdlStartupContactFooter }
+                  : {}
+              }
+              className="verified-custd-mdl-startup-contact-footer"
+            >
+              <TermsAndConditionsOverlay platform={props.platform} />
+              <TouchableOpacity
+                style={
+                  isReactNative && buttonActive
+                    ? { ...styles.verifiedCustdMdlStartupButtonActive }
+                    : isReactNative && !buttonActive
+                    ? { ...styles.verifiedCustdMdlStartupButton }
+                    : {}
+                }
+                className={
+                  buttonActive
+                    ? "verified-custd-mdl-startup-button-active"
+                    : "verified-custd-mdl-startup-button"
+                }
+                onPress={handleSendOTP}
+              >
+                <Text>Get OTP</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {!fontsLoaded && <Text>Loading Module Fonts...</Text>}
+    </ScrollView>
+  );
+};
+
+export default ContactPage;

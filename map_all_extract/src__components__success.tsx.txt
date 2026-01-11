@@ -1,0 +1,233 @@
+import React, { useEffect } from "react";
+import { imageAssets } from "../utils/constants";
+
+const Success = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+  };
+  setStep?: (step: string) => void;
+  handleShowDashboard?: () => void;
+  stepToSet?: string;
+  messageTosend?: { type: string; key?: string; value?: any };
+  customTextHeader: string;
+  customTextFooter: string;
+  showButton?: boolean;
+  showText?: boolean;
+  buttonText?: string;
+  buttonNeutText?: string;
+  buttonFunc?: any;
+  buttonNeutFunc?: any;
+  action?: string;
+  actionHeaderText?: string;
+  actionFooterText?: string;
+  timeoutTime?: number;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    styles,
+    EventEmitter,
+  } = props.platform;
+  useEffect(() => {
+    let timeoutId: any;
+    if (!props.showButton) {
+      timeoutId = setTimeout(() => {
+        if (props.messageTosend) {
+          try {
+            const windowObj = !isReactNative ? window : null;
+            if (!isReactNative && chrome?.runtime?.sendMessage) {
+              chrome.runtime.sendMessage(props.messageTosend, (res) => {
+                if (res && props.action !== "signRecovery") {
+                  windowObj?.close();
+                }
+              });
+            } else if (!isReactNative && !chrome?.runtime?.sendMessage) {
+              const event = new CustomEvent(props.messageTosend?.type, {
+                detail: {
+                  value: props.messageTosend?.value,
+                },
+              });
+              windowObj?.dispatchEvent(event);
+            } else if (isReactNative && EventEmitter) {
+              const vaultEventEmitter = new EventEmitter();
+              vaultEventEmitter.emit(props.messageTosend?.type, {
+                value: props.messageTosend?.value,
+              });
+            }
+          } catch (err) {
+            if (process.env.REACT_APP_NODE_ENV !== "production") {
+              console.error("error sending message: ", err);
+            }
+          }
+        }
+
+        if (props.setStep && props.stepToSet) {
+          props.setStep(props.stepToSet);
+        }
+      }, props.timeoutTime ?? 3000);
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  const handleContinue = () => {
+    props.setStep?.("6");
+  };
+
+  const handleClosePopup = () => {
+    if (!isReactNative && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: "VW_REQ",
+        params: { method: "closePopup" },
+      });
+    }
+  };
+
+  const handleShowDashboard = () => {
+    props.handleShowDashboard();
+  };
+
+  return (
+    <View
+      style={
+        isReactNative
+          ? {
+              ...styles.verifiedCustdMdlSuccessPopupContentContainer,
+              alignContent: "center",
+              justifyContent: "center",
+              height: "100%",
+              width: "100%",
+              overflow: "hidden",
+              padding: 0,
+            }
+          : {
+              alignContent: "center",
+              justifyContent: "center",
+              height: "100%",
+              width: "100%",
+              overflow: "hidden",
+              padding: 0,
+            }
+      }
+      className="verified-custd-mdl-success-popup-content-container"
+    >
+      <View
+        style={
+          isReactNative
+            ? {
+                ...styles.verifiedCustdMdlSuccessPopupContent,
+              }
+            : {}
+        }
+        className="verified-custd-mdl-success-popup-content"
+      >
+        <Image
+          style={{ width: "90%" }}
+          source={{ uri: imageAssets.successIcon }}
+          alt="Success Icon"
+        />
+        <View
+          style={
+            isReactNative
+              ? { ...styles.verifiedCustdMdlSuccessPopupContentText }
+              : {}
+          }
+          className="verified-custd-mdl-success-popup-content-text"
+        >
+          <Text
+            style={
+              isReactNative
+                ? { ...styles.verifiedCustdMdlSuccessPopupContentTextHeader }
+                : {}
+            }
+            className="verified-custd-mdl-success-popup-content-text-header"
+          >
+            {!props?.showButton
+              ? props.customTextHeader
+              : props.actionHeaderText}
+          </Text>
+          <Text
+            style={
+              isReactNative
+                ? { ...styles.verifiedCustdMdlSuccessPopupContentTextFooter }
+                : {}
+            }
+            className="verified-custd-mdl-success-popup-content-text-footer"
+          >
+            {!props?.showButton
+              ? props.customTextFooter
+              : props.actionFooterText}
+          </Text>
+        </View>
+      </View>
+
+      {props.showButton && props.buttonText?.length > 0 && (
+        <TouchableOpacity
+          style={
+            isReactNative
+              ? { ...styles.verifiedCustdMdlStartupButtonActive, marginTop: 10 }
+              : { marginTop: 10 }
+          }
+          onPress={() => {
+            if (props.action === "invitation") {
+              handleContinue();
+            } else if (props.action === "completeRecovery") {
+              handleShowDashboard();
+            } else if (props.buttonFunc) {
+              props.buttonFunc();
+            }
+          }}
+          className="verified-custd-mdl-startup-button-active"
+        >
+          <Text style={{ fontSize: 14 }}>{props.buttonText}</Text>
+        </TouchableOpacity>
+      )}
+
+      {props.showButton && props.buttonNeutText?.length > 0 && (
+        <TouchableOpacity
+          onPress={() => {
+            if (props.action === "invitation") {
+              handleClosePopup();
+            } else if (props.buttonNeutFunc) {
+              props.buttonNeutFunc();
+            }
+          }}
+          className="verified-custd-mdl-startup-button-click"
+          style={
+            isReactNative
+              ? { ...styles.verifiedCustdMdlStartupButtonClick, marginTop: 10 }
+              : { marginTop: 10 }
+          }
+        >
+          <Text style={{ fontSize: 14 }}>{props.buttonNeutText}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+export default Success;

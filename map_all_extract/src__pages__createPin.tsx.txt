@@ -1,0 +1,2469 @@
+import React, { useEffect, useRef, useState } from "react";
+import { useVaultStore } from "../services/store";
+import {
+  base64ToArrayBuffer,
+  hashTheBuffer,
+  hashTheString,
+  initWalletAndContract,
+  loadAllGoogleFonts,
+  loadAllGoogleFontsRN,
+  publicKeyCredentialCreationOptions,
+  publicKeyCredentialRequestOptions,
+  resolveGlobalStyleUnit,
+} from "../utils/helpers";
+import {
+  acceptOrRejectInvitation,
+  checkOrResetOrCreateVault,
+} from "../services/contracts";
+import PageSlider from "../components/slider";
+import Success from "../components/success";
+import {
+  createPasskeyEndpoint,
+  defaultVerifiedUrl,
+  getPasskeyEndpoint,
+  imageAssets,
+} from "../utils/constants";
+import { VerifiedCustodyHelpers } from "../utils/types";
+import { contractAddress, Provider } from "@verified-network/verified-sdk";
+import { ethers } from "ethers";
+import { ChainConfig } from "../utils/config";
+
+const CreatePinPage = (props: {
+  platform: {
+    View: any;
+    Text: any;
+    Image: any;
+    ScrollView: any;
+    StyleSheet: any;
+    TextInput: any;
+    TouchableOpacity: any;
+    ActivityIndicator: any;
+    Font: any;
+    AsyncStorage: any;
+    EventEmitter: any;
+    isReactNative: boolean;
+    styles: any;
+    rnPasskey: any;
+  };
+  createPasskeyDomain?: string;
+  getPasskeyDomain?: string;
+  fontsLoaded?: boolean;
+  setStep: (step: string) => void;
+  setIsLoading: (isLoading: boolean) => void;
+  setShowSuccessBtn?: (showSuccessBtn: boolean) => void;
+  setSuccessBtnText?: (successBtnText: string) => void;
+  setSuccessBtnNeutText?: (successBtnNeutText: string) => void;
+  setSuccessBtnFunc?: (successBtnFunc: any) => void;
+  setSuccessBtnNeutFunc?: (successBtnNeutFunc: any) => void;
+  setActionHeaderText?: (actionHeaderText: string) => void;
+  setActionFooterText?: (actionFooterText: string) => void;
+  userNumberFmt: string;
+  userEmail: string;
+  selectedCountry: { name: string; area: string; flag: string };
+  action?: string;
+  vaultData?: any;
+  txData?: any;
+  helperFunctions?: VerifiedCustodyHelpers;
+  isExistingUser?: boolean;
+  rootTagId?: string;
+  rootExpandedWidth?: string;
+  rootExpandedHeight?: string;
+}) => {
+  const {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    Font,
+    AsyncStorage,
+    EventEmitter,
+    styles,
+    rnPasskey,
+  } = props.platform;
+  const [fontsLoaded, setFontsLoaded] = useState<boolean>(
+    props.fontsLoaded || false
+  );
+  const [pinHide, setPinHide] = useState(true);
+  const [pinIncorrect, setPinIncorrect] = useState(false);
+  const [pinIncorrectText, setPinIncorrectText] = useState("");
+  const [showCustomSuccess, setShowCustomSuccess] = useState(false);
+  const [showInvitation, setShowInvitation] = useState(false);
+  const [showInvitationSuccess, setShowInvitationSuccess] = useState(false);
+  const [showRejectInvitation, setShowRejectInvitation] = useState(false);
+  const [customSuccessText, setCustomSuccessText] = useState("");
+  const [vaultPin, setVaultPin] = useState("");
+  const [vaultRawId, setVaultRawId] = useState(null);
+  const [searchActive, setSearchActive] = useState(false);
+  const [isPin, setIsPin] = useState(false);
+  const [showImportAcct, setShowImportAcct] = useState(false);
+  const [privateKeyError, setPrivateKeyError] = useState("");
+  const [enteredPk, setEnteredPk] = useState("");
+  const [existingCosigners, setExistingCosigners] = useState([]);
+  const [quorum, setQuorum] = useState(0);
+  const [passkeyPopupId, setPasskeyPopupId] = useState(null);
+
+  const {
+    address,
+    pk,
+    chainId,
+    vaultContract,
+    signer,
+    setVaultData,
+    setChainId,
+    setAddress,
+    setPk,
+    setProvider,
+    setSigner,
+    setVaultContract,
+    vaultData,
+  } = useVaultStore();
+
+  const [pin, setPin] = useState(["", "", "", ""]);
+  const [confirmPin, setConfirmPin] = useState(["", "", "", ""]);
+
+  const pinRefs = useRef<Array<any>>([]);
+  const confirmPinRefs = useRef<Array<any>>([]);
+
+  useEffect(() => {
+    const PreloadGoogleFonts = async () => {
+      if (!isReactNative) {
+        // Only load Google fonts on web
+        const isFontsLoaded = loadAllGoogleFonts(document);
+        setFontsLoaded(isFontsLoaded);
+      } else if (Font) {
+        //load fonts with expo-font for react native.
+        await loadAllGoogleFontsRN(Font);
+        setFontsLoaded(true);
+      } else {
+        setFontsLoaded(true);
+      }
+    };
+    if (!props.fontsLoaded) {
+      PreloadGoogleFonts();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFetchUserCosigners = async () => {
+      // console.log("will fetch users cosigners...");
+      if (props.setIsLoading) {
+        props.setIsLoading(true);
+      }
+
+      const quorumSet = await props.vaultData?.vaultContract.getQuorum(
+        props.vaultData?.hashedVaultId
+      );
+      if (quorumSet?.status === 0 && quorumSet?.response?.result?.length > 0) {
+        const cosignersNumber = Number(quorumSet?.response?.result[0]);
+        setQuorum(cosignersNumber);
+      }
+
+      if (props.vaultData?.existingCosignersHashed?.length > 0) {
+        setExistingCosigners([
+          ...new Set(props.vaultData?.existingCosignersHashed),
+        ]);
+        // console.log("hashed cosigners received will stop..");
+        if (props.setIsLoading) {
+          props.setIsLoading(false);
+        }
+        return;
+      }
+      const cntAddresses: any = contractAddress;
+      const custodyAddress = cntAddresses[chainId]?.Custody;
+      if (!custodyAddress) {
+        return;
+      }
+      const custodyEventAbi = [
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              name: "creator",
+              type: "bytes32",
+            },
+            {
+              indexed: false,
+              name: "participant",
+              type: "bytes32",
+            },
+          ],
+          name: "NewParticipant",
+          type: "event",
+        },
+      ];
+      const etherCustodyContract = new ethers.Contract(
+        custodyAddress,
+        custodyEventAbi,
+        props.vaultData?.signer
+      );
+      if (!etherCustodyContract) {
+        return;
+      }
+      const iface = new ethers.Interface(custodyEventAbi);
+      const eventFragment = iface.getEvent("NewParticipant");
+      const topicHash = eventFragment.topicHash;
+
+      const provider = new Provider(ChainConfig[chainId]?.rpcUrls[0]);
+
+      const logs = await provider?.getLogs({
+        address: custodyAddress,
+        fromBlock: ChainConfig[chainId]?.custodyContractBlock || 0,
+        toBlock: "latest",
+        topics: [topicHash],
+      });
+
+      const userParticipants = logs
+        ?.map((log: any) => {
+          const parsedLog = iface.parseLog(log);
+          if (
+            parsedLog?.args?.creator?.toLowerCase() ===
+              hashTheString(
+                props.userEmail?.length > 0
+                  ? props.userEmail
+                  : `+${
+                      props.selectedCountry.area
+                    }${props.userNumberFmt?.replace(" ", "")}`
+              ) &&
+            parsedLog?.args?.creator !== parsedLog?.args?.participant
+          )
+            return parsedLog?.args?.participant;
+          else return null;
+        })
+        ?.filter((participant: any) => participant !== null);
+
+      setExistingCosigners([...new Set(userParticipants)]);
+      if (props.setIsLoading) {
+        props.setIsLoading(false);
+      }
+    };
+
+    if (
+      (props.isExistingUser &&
+        props.action === "reset-pin" &&
+        props.vaultData?.signer,
+      props.vaultData?.hashedVaultId,
+      props.vaultData?.vaultContract)
+    ) {
+      handleFetchUserCosigners();
+    }
+  }, [props.isExistingUser, props.action, props.vaultData]);
+
+  const handleTextChange = (text: string, idx: number, isConfirm: boolean) => {
+    setPinIncorrect(false);
+    setPinIncorrectText("");
+    const clean = text.replace(/\D/g, "");
+    const newPin = isConfirm ? [...confirmPin] : [...pin];
+    newPin[idx] = clean;
+    if (isConfirm) {
+      setConfirmPin(newPin);
+      if (clean && confirmPinRefs.current[idx + 1]) {
+        confirmPinRefs.current[idx + 1].focus();
+      }
+
+      if (
+        idx < 3 &&
+        newPin.every((digit) => digit !== "") &&
+        pin.every((digit) => digit !== "") &&
+        newPin.join("") !== pin.join("")
+      ) {
+        setPinIncorrect(true);
+        setPinIncorrectText("Confirm Pin must match New Pin.");
+      }
+      if (idx === 3 && pin.join("") !== newPin.join("")) {
+        setPinIncorrect(true);
+        setPinIncorrectText("Confirm Pin must match New Pin.");
+      }
+    } else {
+      setPin(newPin);
+      if (clean && pinRefs.current[idx + 1]) {
+        pinRefs.current[idx + 1].focus();
+      }
+      if (
+        confirmPin.every((digit) => digit !== "") &&
+        newPin.join("") !== confirmPin.join("")
+      ) {
+        setPinIncorrect(true);
+        setPinIncorrectText("New Pin must match Confirm Pin.");
+      }
+    }
+  };
+
+  const createPasskey = async () => {
+    setPinIncorrectText("");
+    setPinIncorrect(false);
+    try {
+      const vaultId =
+        props.userEmail?.length > 0
+          ? props.userEmail
+          : `+${props.selectedCountry.area}${props.userNumberFmt?.replace(
+              " ",
+              ""
+            )}`;
+      if (chrome?.windows?.create) {
+        //extension environment
+        const passkeyUrl =
+          props?.createPasskeyDomain?.length > 0
+            ? props?.createPasskeyDomain
+            : createPasskeyEndpoint;
+        const passkeyListener = async (msg: any, sender: any, __: any) => {
+          if (msg.type === "VW:Passkey_Credential") {
+            if (
+              msg?.origin &&
+              passkeyUrl?.toLowerCase()?.startsWith(msg?.origin?.toLowerCase())
+            ) {
+              if (passkeyPopupId) {
+                chrome.windows.remove(passkeyPopupId);
+              }
+              if (sender?.tab && sender?.tab?.windowId) {
+                chrome.windows.remove(sender.tab.windowId);
+              }
+              const credential = msg.data;
+
+              if (credential?.id && credential?.rawId) {
+                const _rawId = base64ToArrayBuffer(credential?.rawId);
+                const hashedId = hashTheBuffer(_rawId);
+                const pinToUse = {
+                  pinString: credential?.id,
+                  hashed: hashedId,
+                  rawId: _rawId,
+                  listener: passkeyListener,
+                };
+
+                await handleVaultManagement(pinToUse);
+              } else {
+                setPinIncorrectText(
+                  `Passkey creation failed: ${credential?.error?.replace(
+                    "See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.",
+                    ""
+                  )} Try again later`
+                );
+                setPinIncorrect(true);
+              }
+            } else {
+              setPinIncorrectText(
+                `Passkey creation failed: invalid passkey origin. Try again later`
+              );
+              setPinIncorrect(true);
+            }
+          }
+        };
+        chrome.runtime.onMessage.addListener(passkeyListener);
+        await chrome.windows
+          .create({
+            url: `${passkeyUrl}?id=${vaultId}`,
+            type: "popup",
+            width: 500,
+            height: 600,
+          })
+          .then((_window) => {
+            setPasskeyPopupId(_window.id);
+          });
+      } else {
+        const credential: any = isReactNative
+          ? rnPasskey.create(
+              publicKeyCredentialCreationOptions(
+                "Verified Wallet",
+                vaultId,
+                hashTheString(vaultId)
+              )
+            )
+          : await navigator?.credentials?.create({
+              publicKey: publicKeyCredentialCreationOptions(
+                "Verified Wallet",
+                vaultId,
+                hashTheString(vaultId)
+              ),
+            });
+
+        if (credential) {
+          const hashedId = hashTheBuffer(credential?.rawId);
+
+          return {
+            pinString: credential?.id,
+            hashed: hashedId,
+            rawId: credential?.rawId,
+          };
+        }
+      }
+
+      return null;
+    } catch (err) {
+      setPinIncorrectText(
+        `Passkey creation failed: ${err?.message?.replace(
+          "See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.",
+          ""
+        )} Try again later`
+      );
+      setPinIncorrect(true);
+      return null;
+    }
+  };
+
+  const requestPasskey = async () => {
+    setPinIncorrectText("");
+    setPinIncorrect(false);
+    if (chrome?.windows?.create && window) {
+      const passkeyUrl =
+        props?.getPasskeyDomain?.length > 0
+          ? props?.getPasskeyDomain
+          : getPasskeyEndpoint;
+      const passkeyListener = async (msg: any, sender: any, __: any) => {
+        if (msg.type === "VW:Passkey_Credential") {
+          if (
+            msg?.origin &&
+            passkeyUrl?.toLowerCase()?.startsWith(msg?.origin?.toLowerCase())
+          ) {
+            if (passkeyPopupId) {
+              chrome.windows.remove(passkeyPopupId);
+            }
+            if (sender?.tab && sender?.tab?.windowId) {
+              chrome.windows.remove(sender.tab.windowId);
+            }
+            const credential = msg.data;
+
+            if (credential?.id && credential?.rawId) {
+              const _rawId = base64ToArrayBuffer(credential?.rawId);
+              const hashedId = hashTheBuffer(_rawId);
+              const pinToUse = {
+                pinString: credential?.id,
+                hashed: hashedId,
+                rawId: _rawId,
+                listener: passkeyListener,
+              };
+
+              await handleVaultManagement(pinToUse);
+            } else {
+              setPinIncorrectText(
+                `Passkey authentication failed: ${credential?.error?.replace(
+                  "See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.",
+                  ""
+                )} Try again later`
+              );
+              setPinIncorrect(true);
+            }
+          } else {
+            setPinIncorrectText(
+              `Passkey authentication failed: invalid passkey origin. Try again later`
+            );
+            setPinIncorrect(true);
+          }
+        }
+      };
+      chrome.runtime.onMessage.addListener(passkeyListener);
+      await chrome.windows
+        .create({
+          url: `${passkeyUrl}`,
+          type: "popup",
+          width: 500,
+          height: 600,
+        })
+        .then((_window) => {
+          setPasskeyPopupId(_window.id);
+        });
+    } else {
+      try {
+        const credential: any = isReactNative
+          ? await rnPasskey.get(publicKeyCredentialRequestOptions())
+          : await navigator?.credentials?.get({
+              publicKey: publicKeyCredentialRequestOptions(),
+            });
+        const hashedId = hashTheBuffer(credential?.rawId);
+        return {
+          pinString: credential?.id,
+          hashed: hashedId,
+          rawId: credential?.rawId,
+        };
+      } catch (err) {
+        setPinIncorrectText(
+          `Passkey authentication failed: ${err?.message?.replace(
+            "See: https://www.w3.org/TR/webauthn-2/#sctn-privacy-considerations-client.",
+            ""
+          )} Try again later`
+        );
+        setPinIncorrect(true);
+      }
+    }
+  };
+
+  const handleKeyPress = (_: any, idx: number, e: any, isConfirm: boolean) => {
+    const key = e.nativeEvent.key;
+
+    if (
+      !isConfirm &&
+      key === "Backspace" &&
+      !pin[idx] &&
+      idx > 0 &&
+      pinRefs.current[idx - 1]
+    ) {
+      pinRefs.current[idx - 1].focus();
+    }
+
+    if (
+      isConfirm &&
+      key === "Backspace" &&
+      !confirmPin[idx] &&
+      idx > 0 &&
+      confirmPinRefs.current[idx - 1]
+    ) {
+      confirmPinRefs.current[idx - 1].focus();
+    }
+  };
+
+  const isConfirmActive = () => {
+    if (!isPin) {
+      return true;
+    }
+
+    if (props.isExistingUser) {
+      return pin.every((digit) => digit !== "");
+    } else {
+      return (
+        pin.every((digit) => digit !== "") &&
+        confirmPin.every(
+          (digit) => digit !== "" && pin.join("") === confirmPin.join("")
+        )
+      );
+    }
+  };
+
+  const isConfirmActiveImp = () => {
+    if (
+      showImportAcct &&
+      enteredPk?.length === 66 &&
+      enteredPk?.toLowerCase()?.startsWith("0x")
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const handleVaultManagement = async (pinToUse?: {
+    pinString: string;
+    hashed: string;
+    rawId: any;
+    address?: string;
+    pk?: string;
+    vaultContract?: any;
+    signer?: any;
+    vaultData?: any;
+    listener?: any;
+  }) => {
+    //remove last used event listener
+    if (pinToUse?.listener && chrome?.runtime?.onMessage?.removeListener) {
+      chrome?.runtime?.onMessage?.removeListener(pinToUse?.listener);
+    }
+    if (!props.helperFunctions) {
+      setPinIncorrectText(
+        "No Helper Functions. Please include all helper functions in the CreatePinPage props."
+      );
+      setPinIncorrect(true);
+    } else {
+      setPinIncorrectText("");
+      setPinIncorrect(false);
+
+      const vaultId =
+        props.userEmail?.length > 0
+          ? props.userEmail
+          : `+${props.selectedCountry.area}${props.userNumberFmt?.replace(
+              " ",
+              ""
+            )}`;
+      const channel = props.userEmail?.length > 0 ? "email" : "sms";
+
+      if (
+        (!props.isExistingUser &&
+          isConfirmActive() &&
+          vaultId &&
+          channel &&
+          pk &&
+          address &&
+          vaultContract) ||
+        (!props.isExistingUser &&
+          isConfirmActive() &&
+          vaultId &&
+          channel &&
+          props.vaultData?.vaultContract &&
+          props.vaultData?.hashedOldPin) ||
+        (props.isExistingUser &&
+          isConfirmActive() &&
+          vaultId &&
+          channel &&
+          pk &&
+          address &&
+          vaultContract) ||
+        (props.isExistingUser &&
+          isConfirmActive() &&
+          vaultId &&
+          channel &&
+          props.vaultData?.vaultContract)
+      ) {
+        props.setIsLoading(true);
+        const vaultPin = pinToUse?.pinString || pin.join("");
+        const hashedVaultId = hashTheString(vaultId);
+        const hashedVaultPin = pinToUse?.hashed || hashTheString(vaultPin);
+        await checkOrResetOrCreateVault(
+          isReactNative,
+          AsyncStorage,
+          EventEmitter,
+          vaultId,
+          hashedVaultId,
+          vaultPin,
+          hashedVaultPin,
+          channel,
+          pinToUse?.pk ? pinToUse?.pk : pk ? pk : props.vaultData?.pk,
+          pinToUse?.address
+            ? pinToUse?.address
+            : address
+            ? address
+            : props.vaultData?.address,
+          pinToUse?.vaultContract
+            ? pinToUse?.vaultContract
+            : vaultContract
+            ? vaultContract
+            : props.vaultData?.vaultContract,
+          props.action,
+          pinToUse?.vaultData ? pinToUse?.vaultData : props.vaultData,
+          props.txData,
+          pinToUse?.rawId,
+          props.action === "reset-pin"
+            ? [props.vaultData?.hashedVaultId, ...existingCosigners]
+            : undefined,
+          quorum
+        ).then(async (res: any) => {
+          props.setIsLoading(false);
+          if (res) {
+            setVaultData(
+              res?.shouldStop && res?.vaultId
+                ? {
+                    vaultId: res?.vaultId,
+                    hashedVaultId: res?.hashedVaultId,
+                    hashedVaultPin: res?.hashedVaultPin,
+                    pk: res?.pk,
+                    rawId: res?.rawId,
+                    channel: res?.channel,
+                  }
+                : res?.shouldStop
+                ? {}
+                : res
+            );
+            setPinIncorrectText("");
+            setPinIncorrect(false);
+            if (props.action === "invitation") {
+              setVaultPin(vaultPin);
+              setVaultRawId(pinToUse?.rawId);
+              setShowInvitation(true);
+            } else if (props.action === "reset-pin") {
+              if (!isReactNative && chrome?.storage?.local && isPin) {
+                chrome.storage.local.remove("myVault");
+              } else if (
+                !isReactNative &&
+                !chrome?.storage?.local &&
+                localStorage &&
+                isPin
+              ) {
+                localStorage.removeItem("myVault");
+              } else if (isReactNative && AsyncStorage && isPin) {
+                await AsyncStorage.removeItem("myVault");
+              }
+              await props.helperFunctions.sendCreatorAuthChanged(
+                channel,
+                vaultId,
+                pinToUse?.hashed,
+                props.vaultData.hashedVaultPin,
+                Date.now()
+              ),
+                setCustomSuccessText(
+                  `You have successfully reset your account ${
+                    isPin ? "4-Digits PIN" : "Passkey"
+                  }.  ${
+                    isPin
+                      ? "Login with the new 4-Digits PIN"
+                      : "your new Passkey will be used to authenticate your account."
+                  }`
+                );
+              setShowCustomSuccess(true);
+            } else if (!res?.shouldStop) {
+              props.setStep("5");
+            } else if (res?.shouldStop && props.action !== "getPk") {
+              setCustomSuccessText("");
+              setShowCustomSuccess(true);
+            } else if (res?.shouldStop && props.action === "getPk") {
+              props.setStep("0");
+            }
+          } else if (res === null) {
+            if (props.action === "reset-pin") {
+              setPinIncorrectText("Reset pin failed. Try again later.");
+              setPinIncorrect(true);
+            } else {
+              setPinIncorrectText(
+                `You are an existing user. Please use the right ${
+                  isPin
+                    ? "existing 4-Digits PIN"
+                    : "existing Passkey for" + " " + vaultId
+                } to recover your account login access on this device/browser`
+              );
+              setPinIncorrect(true);
+            }
+          } else {
+            setPinIncorrectText(
+              "Unexpected error while creating account. Please try again later."
+            );
+            setPinIncorrect(true);
+          }
+        });
+      } else if (!isConfirmActive()) {
+        setPinIncorrectText(
+          props.isExistingUser
+            ? "Enter full pin."
+            : "New Pin must match Confirm Pin."
+        );
+        setPinIncorrect(true);
+      }
+    }
+  };
+
+  const handleAcceptAndRejectInvitation = async (accepted: boolean) => {
+    const vaultId =
+      props.userEmail?.length > 0
+        ? props.userEmail
+        : `+${props.selectedCountry.area}${props.userNumberFmt?.replace(
+            " ",
+            ""
+          )}`;
+    const channel = props.userEmail?.length > 0 ? "email" : "sms";
+    if (
+      (vaultPin?.length === 4 &&
+        props?.vaultData?.hashedVaultId &&
+        props.vaultData?.hashedVaultPin &&
+        vaultId) ||
+      (vaultRawId &&
+        props?.vaultData?.hashedVaultId &&
+        props.vaultData?.hashedVaultPin &&
+        vaultId)
+    ) {
+      props.setIsLoading(true);
+      const hashedVaultId = hashTheString(vaultId);
+      const hashedVaultPin = isPin
+        ? hashTheString(vaultPin)
+        : hashTheBuffer(vaultRawId);
+      await acceptOrRejectInvitation(
+        props.helperFunctions.sendCreatorAcceptance,
+        props.helperFunctions.sendCreatorRejection,
+        channel,
+        hashedVaultId,
+        hashedVaultPin,
+        props?.vaultData?.hashedVaultId,
+        props.vaultData?.hashedVaultPin,
+        props.vaultData?.vaultId,
+        vaultId,
+        accepted,
+        vaultContract
+      ).then((res) => {
+        props.setIsLoading(false);
+        if (
+          res &&
+          !vaultData?.isExisting &&
+          props.setShowSuccessBtn &&
+          props.setSuccessBtnText &&
+          props.setSuccessBtnNeutText &&
+          props.setActionHeaderText &&
+          props.setActionFooterText
+        ) {
+          props.setShowSuccessBtn(true);
+          props.setSuccessBtnText("Continue Setting Up Your Account");
+          props.setSuccessBtnNeutText("Do It Later");
+          props.setActionHeaderText("Successful");
+          props.setActionFooterText(
+            accepted
+              ? `You have been added as a Co-Signer for ${props.vaultData?.vaultId}`
+              : `You rejected Co-signer reject from ${props.vaultData?.vaultId}`
+          );
+          props.setStep("5");
+        } else if (res && vaultData?.isExisting) {
+          setShowInvitationSuccess(true);
+        }
+      });
+    }
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={{
+        flexGrow: 1,
+        padding: 16,
+        backgroundColor: "#fff",
+      }}
+    >
+      {fontsLoaded && (
+        <React.Fragment>
+          {!showCustomSuccess && !showInvitation && (
+            <React.Fragment>
+              {!showImportAcct && (
+                <View
+                  style={
+                    isReactNative
+                      ? { ...styles.verifiedCustdMdlStartupLanguage }
+                      : {}
+                  }
+                  className="verified-custd-mdl-startup-language"
+                >
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContact }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact"
+                  >
+                    <PageSlider
+                      platform={props.platform}
+                      sliderCount={[1, 2, 3]}
+                      currentSlider="1"
+                    />
+                    <View
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStartupContactContent }
+                          : {}
+                      }
+                      className="verified-custd-mdl-startup-contact-content"
+                    >
+                      {!props.isExistingUser && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? { ...styles.verifiedCustdMdlStartupContactText }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-contact-text"
+                        >
+                          {isPin
+                            ? "Create PIN"
+                            : "Secure Your Account with a Passkey"}
+                        </Text>
+                      )}
+                      {props.isExistingUser && props.action !== "reset-pin" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? { ...styles.verifiedCustdMdlStartupContactText }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-contact-text"
+                        >
+                          {isPin
+                            ? "Enter PIN"
+                            : "Sign-in with Existing Passkey"}
+                        </Text>
+                      )}
+                      {props.isExistingUser && props.action === "reset-pin" && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? { ...styles.verifiedCustdMdlStartupContactText }
+                              : {}
+                          }
+                          className="verified-custd-mdl-startup-contact-text"
+                        >
+                          {isPin ? "Change Pin" : "Change Passkey"}
+                        </Text>
+                      )}
+                      <View
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupOtpText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-otp-text"
+                      >
+                        {!props.isExistingUser && (
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlStartupOtpHeaderText,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-startup-otp-header-text"
+                          >
+                            Protect your blockchain assets with{" "}
+                            {isPin ? "PIN" : "Passkey"}. This{" "}
+                            {isPin ? "PIN" : "Passkey"} will be required for all
+                            future transactions and logins.
+                          </Text>
+                        )}
+                        {props.isExistingUser && (
+                          <React.Fragment>
+                            {props.action !== "reset-pin" && (
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupOtpHeaderText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-startup-otp-header-text"
+                              >
+                                Welcome back, please login using{" "}
+                                <Text style={{ color: "#0C0C0E" }}>
+                                  {isPin
+                                    ? "existing 4-Digits PIN"
+                                    : "existing Passkey"}
+                                </Text>{" "}
+                                for your{" "}
+                                <Text style={{ color: "#0C0C0E" }}>
+                                  {props.userEmail?.length > 0
+                                    ? props.userEmail
+                                    : `+${
+                                        props.selectedCountry.area
+                                      }${props.userNumberFmt?.replace(
+                                        " ",
+                                        ""
+                                      )}`}
+                                </Text>{" "}
+                                account.
+                              </Text>
+                            )}
+
+                            {props.action === "reset-pin" && (
+                              <Text
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupOtpHeaderText,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-startup-otp-header-text"
+                              >
+                                Welcome back, Create new
+                                <Text style={{ color: "#0C0C0E" }}>
+                                  {isPin ? "4-Digits PIN" : "Passkey"}
+                                </Text>{" "}
+                                for your{" "}
+                                <Text style={{ color: "#0C0C0E" }}>
+                                  {props.userEmail?.length > 0
+                                    ? props.userEmail
+                                    : `+${
+                                        props.selectedCountry.area
+                                      }${props.userNumberFmt?.replace(
+                                        " ",
+                                        ""
+                                      )}`}
+                                </Text>{" "}
+                                account.
+                              </Text>
+                            )}
+                          </React.Fragment>
+                        )}
+                      </View>
+                    </View>
+
+                    {!isPin && (
+                      <View
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlAddCosignerMoreBody }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-body"
+                      >
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreHeaderCont,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-header-cont"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-more-title-cont"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                      fontSize: resolveGlobalStyleUnit(
+                                        isReactNative,
+                                        "14px"
+                                      ),
+                                    }
+                                  : {
+                                      fontSize: resolveGlobalStyleUnit(
+                                        isReactNative,
+                                        "14px"
+                                      ),
+                                    }
+                              }
+                              className="verified-custd-mdl-add-cosigner-more-title"
+                            >
+                              What is a passkey?
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                              : {
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-label"
+                        >
+                          A passkey replaces passwords. Only your device can
+                          unlock it via PIN, Face/Voice/Fingerprint.
+                        </Text>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                              : {
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-label"
+                        >
+                          Your passkey is stored in your cloud account such as
+                          Apple iCloud Keychain, Google Password Manager, or
+                          Microsoft Account and synchronized across all devices.
+                        </Text>
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                              : {
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "12px"
+                                  ),
+                                }
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-label"
+                        >
+                          In the event of device loss, as long as you have
+                          access to your cloud account, you can recover your
+                          passkey.
+                        </Text>
+                        {!props.isExistingUser && (
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                    fontSize: resolveGlobalStyleUnit(
+                                      isReactNative,
+                                      "12px"
+                                    ),
+                                  }
+                                : {
+                                    fontSize: resolveGlobalStyleUnit(
+                                      isReactNative,
+                                      "12px"
+                                    ),
+                                  }
+                            }
+                            className="verified-custd-mdl-add-cosigner-more-label"
+                          >
+                            Click "Create New Passkey" button, passkey setup
+                            popup will appears to create new passkey and secure
+                            your account.
+                          </Text>
+                        )}
+                        {props.isExistingUser && (
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                    fontSize: resolveGlobalStyleUnit(
+                                      isReactNative,
+                                      "12px"
+                                    ),
+                                  }
+                                : {
+                                    fontSize: resolveGlobalStyleUnit(
+                                      isReactNative,
+                                      "12px"
+                                    ),
+                                  }
+                            }
+                            className="verified-custd-mdl-add-cosigner-more-label"
+                          >
+                            Click{" "}
+                            {props.action === "reset-pin"
+                              ? "Create New Passkey"
+                              : "Login With Passkey"}{" "}
+                            button, passkey popup will appears{" "}
+                            {props.action === "reset-pin"
+                              ? "to create new passkey and secure your account"
+                              : "to login using the accoun't passkey."}
+                          </Text>
+                        )}
+                        <TouchableOpacity
+                          style={{ background: "transparent" }}
+                          onPress={() => {
+                            if (!isReactNative) {
+                              window?.open(
+                                "https://blog.google/inside-google/googlers/ask-a-techspert/how-passkeys-work",
+                                "_blank"
+                              );
+                            }
+                          }}
+                        >
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerMoreLabelLink,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-more-label-link"
+                          >
+                            Learn More about Passkey
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {isPin && (
+                      <React.Fragment>
+                        <View
+                          style={
+                            isReactNative
+                              ? { ...styles.verifiedCustdMdlOtpInputContainer }
+                              : {}
+                          }
+                          className="verified-custd-mdl-otp-input-container"
+                        >
+                          {!props.isExistingUser && (
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlPinInputContainerText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-pin-input-container-text"
+                            >
+                              New PIN
+                            </Text>
+                          )}
+                          <View
+                            style={
+                              isReactNative
+                                ? { ...styles.verifiedCustdMdlOtpInputGroup }
+                                : {}
+                            }
+                            className="verified-custd-mdl-otp-input-group"
+                          >
+                            {pin.map((_, idx) => (
+                              <TextInput
+                                key={`pin-${idx}`}
+                                style={
+                                  isReactNative && pinIncorrect
+                                    ? { ...styles.verifiedCustdMdlOtpInputRed }
+                                    : isReactNative && pinIncorrect
+                                    ? { ...styles.verifiedCustdMdlOtpInput }
+                                    : {}
+                                }
+                                className={
+                                  pinIncorrect
+                                    ? "verified-custd-mdl-otp-input-red"
+                                    : "verified-custd-mdl-otp-input"
+                                }
+                                secureTextEntry={pinHide}
+                                keyboardType="number-pad"
+                                maxLength={1}
+                                ref={(el: any) => (pinRefs.current[idx] = el)}
+                                value={pin[idx]}
+                                onChangeText={(text: any) =>
+                                  handleTextChange(text, idx, false)
+                                }
+                                onKeyPress={(e: any) =>
+                                  handleKeyPress(e, idx, e, false)
+                                }
+                              />
+                            ))}
+                          </View>
+
+                          {props.isExistingUser && (
+                            <View
+                              style={
+                                isReactNative
+                                  ? { ...styles.verifiedCustdMdlOtpTimer }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-otp-timer"
+                            >
+                              {!pinIncorrect && <Text></Text>}
+                              {pinIncorrect && pinIncorrectText === "" && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpIncorrectText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-otp-incorrect-text"
+                                >
+                                  Please enter the correct pin
+                                </Text>
+                              )}
+                              {pinIncorrect && pinIncorrectText?.length > 0 && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpIncorrectText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-otp-incorrect-text"
+                                >
+                                  {pinIncorrectText}
+                                </Text>
+                              )}
+                              {!pinHide && (
+                                <TouchableOpacity
+                                  style={{
+                                    background: "transparent",
+                                    width: 24,
+                                    height: 24,
+                                  }}
+                                  onPress={() => setPinHide(true)}
+                                >
+                                  <Image
+                                    style={{
+                                      cursor: "pointer",
+                                      width: 24,
+                                      height: 24,
+                                    }}
+                                    source={{ uri: imageAssets.pinShow }}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                              {pinHide && (
+                                <TouchableOpacity
+                                  style={{
+                                    background: "transparent",
+                                    width: 24,
+                                    height: 24,
+                                  }}
+                                  onPress={() => setPinHide(false)}
+                                >
+                                  <Image
+                                    style={{
+                                      cursor: "pointer",
+                                      width: 24,
+                                      height: 24,
+                                    }}
+                                    source={{ uri: imageAssets.pinHide }}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          )}
+                        </View>
+
+                        {!props.isExistingUser && (
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlOtpInputContainer,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-otp-input-container"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlPinInputContainerText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-pin-input-container-text"
+                            >
+                              Confirm PIN
+                            </Text>
+                            <View
+                              style={
+                                isReactNative
+                                  ? { ...styles.verifiedCustdMdlOtpInputGroup }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-otp-input-group"
+                            >
+                              {confirmPin.map((_, idx) => (
+                                <TextInput
+                                  key={`confirm-${idx}`}
+                                  style={
+                                    isReactNative && pinIncorrect
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpInputRed,
+                                        }
+                                      : isReactNative && !pinIncorrect
+                                      ? { ...styles.verifiedCustdMdlOtpInput }
+                                      : {}
+                                  }
+                                  className={
+                                    pinIncorrect
+                                      ? "verified-custd-mdl-otp-input-red"
+                                      : "verified-custd-mdl-otp-input"
+                                  }
+                                  secureTextEntry={pinHide}
+                                  keyboardType="number-pad"
+                                  maxLength={1}
+                                  ref={(el: any) =>
+                                    (confirmPinRefs.current[idx] = el)
+                                  }
+                                  value={confirmPin[idx]}
+                                  onChangeText={(text: any) =>
+                                    handleTextChange(text, idx, true)
+                                  }
+                                  onKeyPress={(e: any) =>
+                                    handleKeyPress(e, idx, e, true)
+                                  }
+                                />
+                              ))}
+                            </View>
+
+                            <View
+                              style={
+                                isReactNative
+                                  ? { ...styles.verifiedCustdMdlOtpTimer }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-otp-timer"
+                            >
+                              {!pinIncorrect && <Text></Text>}
+                              {pinIncorrect && pinIncorrectText === "" && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpIncorrectText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-otp-incorrect-text"
+                                >
+                                  Please enter the correct pin
+                                </Text>
+                              )}
+                              {pinIncorrect && pinIncorrectText?.length > 0 && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpIncorrectText,
+                                        }
+                                      : {}
+                                  }
+                                  className="verified-custd-mdl-otp-incorrect-text"
+                                >
+                                  {pinIncorrectText}
+                                </Text>
+                              )}
+                              {!pinHide && (
+                                <TouchableOpacity
+                                  style={{
+                                    background: "transparent",
+                                    width: 24,
+                                    height: 24,
+                                  }}
+                                  onPress={() => setPinHide(true)}
+                                >
+                                  <Image
+                                    style={{
+                                      cursor: "pointer",
+                                      width: 24,
+                                      height: 24,
+                                    }}
+                                    source={{ uri: imageAssets.pinShow }}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                              {pinHide && (
+                                <TouchableOpacity
+                                  style={{
+                                    background: "transparent",
+                                    width: 24,
+                                    height: 24,
+                                  }}
+                                  onPress={() => setPinHide(false)}
+                                >
+                                  <Image
+                                    style={{
+                                      cursor: "pointer",
+                                      width: 24,
+                                      height: 24,
+                                    }}
+                                    source={{ uri: imageAssets.pinHide }}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </React.Fragment>
+                    )}
+                  </View>
+
+                  {!searchActive && <View style={{ height: 20 }}></View>}
+
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContactFooter }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact-footer"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlStContactFooterFirstSection,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-st-contact-footer-first-section"
+                    >
+                      {!isPin && (
+                        <React.Fragment>
+                          {pinIncorrect && pinIncorrectText?.length > 0 && (
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlOtpIncorrectText,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-otp-incorrect-text"
+                            >
+                              {pinIncorrectText}
+                            </Text>
+                          )}
+                          {props.isExistingUser && (
+                            <React.Fragment>
+                              {props.action === "reset-pin" && !isPin && (
+                                <Text
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlOtpIncorrectText,
+                                          color: "#603FF4",
+                                          margin: "10px",
+                                        }
+                                      : { color: "#603FF4", margin: "10px" }
+                                  }
+                                  className="verified-custd-mdl-otp-incorrect-text"
+                                >
+                                  Note: Before starting this process ensure you
+                                  have backed up your private key. To do so,
+                                  please navigate to the "Account" section on
+                                  your dashboard and click on "View Private
+                                  Key." Once displayed, write down the private
+                                  key and store it securely. Incomplete passkey
+                                  change process may result in loss of access to
+                                  your account.
+                                </Text>
+                              )}
+                              <TouchableOpacity
+                                id="verified-custd-mdl-otp-button"
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupButtonActive,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-startup-button-active"
+                                onPress={async (e: any) => {
+                                  if (props.action === "reset-pin") {
+                                    const credentialIdHashed =
+                                      await createPasskey();
+                                    if (credentialIdHashed) {
+                                      await handleVaultManagement(
+                                        credentialIdHashed
+                                      );
+                                    }
+                                  } else {
+                                    const credentialIdHashed =
+                                      await requestPasskey();
+
+                                    if (credentialIdHashed) {
+                                      await handleVaultManagement(
+                                        credentialIdHashed
+                                      );
+                                    }
+                                  }
+                                }}
+                              >
+                                {props.action === "reset-pin" && (
+                                  <Text>Create New Passkey</Text>
+                                )}
+                                {props.action !== "reset-pin" && (
+                                  <Text>Login With Passkey</Text>
+                                )}
+                              </TouchableOpacity>
+                            </React.Fragment>
+                          )}
+
+                          {!props.isExistingUser && (
+                            <React.Fragment>
+                              <TouchableOpacity
+                                id="verified-custd-mdl-otp-button"
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupButtonActive,
+                                      }
+                                    : {}
+                                }
+                                className="verified-custd-mdl-startup-button-active"
+                                onPress={async (e: any) => {
+                                  if (!props.helperFunctions) {
+                                    setPinIncorrectText(
+                                      "No Helper Functions. Please include all helper functions in the CreatePinPage props."
+                                    );
+                                    setPinIncorrect(true);
+                                    return;
+                                  }
+                                  const credentialIdHashed =
+                                    await createPasskey();
+                                  if (credentialIdHashed) {
+                                    await handleVaultManagement(
+                                      credentialIdHashed
+                                    );
+                                  }
+                                }}
+                              >
+                                <Text>Create New Account</Text>
+                              </TouchableOpacity>
+
+                              <View
+                                className="verified-custd-mdl-p-p-payment-portal-amount-info-separator"
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlPPPaymentPortalAmountInfoSeparator,
+                                      }
+                                    : {}
+                                }
+                              >
+                                <View
+                                  className="verified-custd-mdl-p-p-payment-portal-line"
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlPPPaymentPortalLine,
+                                        }
+                                      : {}
+                                  }
+                                ></View>
+                                <Text
+                                  className="verified-custd-mdl-p-payment-portal-separator-text"
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlPPaymentPortalSeparatorText,
+                                        }
+                                      : {}
+                                  }
+                                >
+                                  OR
+                                </Text>
+                                <View
+                                  className="verified-custd-mdl-p-p-payment-portal-line"
+                                  style={
+                                    isReactNative
+                                      ? {
+                                          ...styles.verifiedCustdMdlPPPaymentPortalLine,
+                                        }
+                                      : {}
+                                  }
+                                ></View>
+                              </View>
+
+                              <TouchableOpacity
+                                style={
+                                  isReactNative
+                                    ? {
+                                        ...styles.verifiedCustdMdlStartupButtonActive,
+                                        border: "1px solid  #0c0c0e",
+                                      }
+                                    : {
+                                        border:
+                                          "1px solid var(--Neutral-950, #0c0c0e)",
+                                      }
+                                }
+                                className="verified-custd-mdl-startup-button-click"
+                                onPress={async (e: any) => {
+                                  setShowImportAcct(true);
+                                }}
+                              >
+                                <Text>Import An Existing account</Text>
+                              </TouchableOpacity>
+                            </React.Fragment>
+                          )}
+                        </React.Fragment>
+                      )}
+
+                      {isPin && (
+                        <TouchableOpacity
+                          id="verified-custd-mdl-otp-button"
+                          style={
+                            isReactNative && isConfirmActive()
+                              ? {
+                                  ...styles.verifiedCustdMdlStartupButtonActive,
+                                }
+                              : isReactNative && !isConfirmActive()
+                              ? { ...styles.verifiedCustdMdlStartupButton }
+                              : {}
+                          }
+                          className={
+                            isConfirmActive()
+                              ? "verified-custd-mdl-startup-button-active"
+                              : "verified-custd-mdl-startup-button"
+                          }
+                          onPress={async (e: any) => {
+                            await handleVaultManagement();
+                          }}
+                        >
+                          <Text>Proceed</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              )}
+              {showImportAcct && (
+                <View
+                  style={
+                    isReactNative
+                      ? { ...styles.verifiedCustdMdlStartupLanguage }
+                      : {}
+                  }
+                  className="verified-custd-mdl-startup-language"
+                >
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContact }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact"
+                  >
+                    <PageSlider
+                      platform={props.platform}
+                      sliderCount={[1, 2, 3]}
+                      currentSlider="1"
+                    />
+                    <View
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStartupContactContent }
+                          : {}
+                      }
+                      className="verified-custd-mdl-startup-contact-content"
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupContactText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-contact-text"
+                      >
+                        Import Existing Account
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? {
+                            ...styles.verifiedCustdMdlStContactInput,
+                            marginTop: "20px",
+                            marginBottom: "20px",
+                          }
+                        : { marginTop: "20px", marginBottom: "20px" }
+                    }
+                    className="verified-custd-mdl-st-contact-input"
+                  >
+                    <TextInput
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStContactSecondSection }
+                          : {}
+                      }
+                      className="verified-custd-mdl-st-contact-second-section"
+                      placeholder="Private key starting with 0x"
+                      placeholderTextColor="#b6b7c3"
+                      value={enteredPk}
+                      onChangeText={(text: string) => {
+                        setEnteredPk(text);
+                      }}
+                    />
+                    {privateKeyError?.length > 0 && (
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlInputErrorText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-input-error-text"
+                      >
+                        {privateKeyError}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerMoreBody }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-more-body"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreHeaderCont,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-header-cont"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-title-cont"
+                      >
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "14px"
+                                  ),
+                                }
+                              : {
+                                  fontSize: resolveGlobalStyleUnit(
+                                    isReactNative,
+                                    "14px"
+                                  ),
+                                }
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-title"
+                        >
+                          What is a passkey?
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                          : {
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      A passkey replaces passwords. Only your device can unlock
+                      it via PIN, Face/Voice/Fingerprint.
+                    </Text>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                          : {
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      Your passkey is stored in your cloud account such as Apple
+                      iCloud Keychain, Google Password Manager, or Microsoft
+                      Account and synchronized across all devices.
+                    </Text>
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                          : {
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      In the event of device loss, as long as you have access to
+                      your cloud account, you can recover your passkey.
+                    </Text>
+
+                    <Text
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                          : {
+                              fontSize: resolveGlobalStyleUnit(
+                                isReactNative,
+                                "12px"
+                              ),
+                            }
+                      }
+                      className="verified-custd-mdl-add-cosigner-more-label"
+                    >
+                      Click "Proceed With Passkey" button, passkey setup popup
+                      will appears to create new passkey and secure your
+                      account.
+                    </Text>
+
+                    <TouchableOpacity
+                      style={{ background: "transparent" }}
+                      onPress={() => {
+                        if (!isReactNative) {
+                          window?.open(
+                            "https://blog.google/inside-google/googlers/ask-a-techspert/how-passkeys-work",
+                            "_blank"
+                          );
+                        }
+                      }}
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerMoreLabelLink,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-label-link"
+                      >
+                        Learn More about Passkey
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {!searchActive && <View style={{ height: 20 }}></View>}
+
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContactFooter }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact-footer"
+                  >
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlStContactFooterFirstSection,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-st-contact-footer-first-section"
+                    >
+                      {pinIncorrect && pinIncorrectText?.length > 0 && (
+                        <Text
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlOtpIncorrectText,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-otp-incorrect-text"
+                        >
+                          {pinIncorrectText}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        id="verified-custd-mdl-otp-button"
+                        style={
+                          isReactNative && isConfirmActiveImp()
+                            ? {
+                                ...styles.verifiedCustdMdlStartupButtonActive,
+                              }
+                            : isReactNative && !isConfirmActiveImp()
+                            ? { ...styles.verifiedCustdMdlStartupButton }
+                            : {}
+                        }
+                        className={
+                          isConfirmActiveImp()
+                            ? "verified-custd-mdl-startup-button-active"
+                            : "verified-custd-mdl-startup-button"
+                        }
+                        onPress={async (e: any) => {
+                          try {
+                            if (!isConfirmActiveImp()) {
+                              setPinIncorrect(true);
+                              setPinIncorrectText(
+                                "Invalid private key entered. Please scroll up, check private key and try again."
+                              );
+                              return;
+                            }
+                            const walletAndContractDetails =
+                              await initWalletAndContract(chainId, enteredPk);
+                            if (
+                              !walletAndContractDetails?.chainId ||
+                              !walletAndContractDetails?.address ||
+                              !walletAndContractDetails?.pk ||
+                              !walletAndContractDetails?.provider ||
+                              !walletAndContractDetails?.signer ||
+                              !walletAndContractDetails?.vaultContract
+                            ) {
+                              setPinIncorrect(true);
+                              setPinIncorrectText(
+                                "Invalid private key entered. Please check private key starts with 0x and try again."
+                              );
+                              return;
+                            }
+                            setChainId(walletAndContractDetails.chainId);
+                            setAddress(walletAndContractDetails.address);
+                            setPk(walletAndContractDetails.pk);
+                            setProvider(walletAndContractDetails.provider);
+                            setSigner(walletAndContractDetails.signer);
+                            setVaultData(walletAndContractDetails.vaultData);
+                            setVaultContract(
+                              walletAndContractDetails.vaultContract
+                            );
+
+                            const credentialIdHashed = await createPasskey();
+
+                            if (credentialIdHashed) {
+                              await handleVaultManagement({
+                                ...credentialIdHashed,
+                                pk: walletAndContractDetails.pk,
+                                vaultContract:
+                                  walletAndContractDetails.vaultContract,
+                                signer: walletAndContractDetails.signer,
+                                address: walletAndContractDetails.address,
+                                vaultData: walletAndContractDetails.vaultData,
+                              });
+                            }
+                          } catch (err) {
+                            setPinIncorrect(true);
+                            setPinIncorrectText(
+                              "Error while importing account.try again later."
+                            );
+                            return;
+                          }
+                        }}
+                      >
+                        <Text>Proceed With Passkey</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </React.Fragment>
+          )}
+
+          {!showCustomSuccess && showInvitation && (
+            <React.Fragment>
+              {!showInvitationSuccess && (
+                <View
+                  className="verified-custd-mdl-startup-language"
+                  style={
+                    isReactNative
+                      ? {
+                          ...styles.verifiedCustdMdlStartupLanguage,
+                          padding: 0,
+                          position: "relative",
+                        }
+                      : { padding: 0, position: "relative" }
+                  }
+                >
+                  <View
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlStartupContact }
+                        : {}
+                    }
+                    className="verified-custd-mdl-startup-contact"
+                  >
+                    <PageSlider
+                      platform={props.platform}
+                      sliderCount={[1, 2, 3]}
+                      currentSlider="1"
+                    />
+                    <View
+                      style={
+                        isReactNative
+                          ? { ...styles.verifiedCustdMdlStartupContactContent }
+                          : {}
+                      }
+                      className="verified-custd-mdl-startup-contact-content"
+                    >
+                      <Text
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlStartupContactText }
+                            : {}
+                        }
+                        className="verified-custd-mdl-startup-contact-text"
+                      >
+                        <Text style={{ fontWeight: "bold" }}>
+                          {props.vaultData?.vaultId}
+                        </Text>{" "}
+                        has requested you to be a Co-Signer
+                      </Text>
+                    </View>
+                  </View>
+                  <Image
+                    style={
+                      isReactNative
+                        ? { ...styles.verifiedCustdMdlAddCosignerBodyIcon }
+                        : {}
+                    }
+                    className="verified-custd-mdl-add-cosigner-body-icon"
+                    source={{ uri: imageAssets.addCoSignerIcon1 }}
+                  />
+                  {!showRejectInvitation && (
+                    <ScrollView>
+                      <View
+                        style={
+                          isReactNative
+                            ? { ...styles.verifiedCustdMdlAddCosignerMoreBody }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-more-body"
+                      >
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreHeaderCont,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-more-header-cont"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerMoreTitleCont,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-more-title-cont"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerMoreTitle,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-more-title"
+                            >
+                              What is a Co-Signer?
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          className="verified-custd-mdl-add-cosigner-more-label"
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerMoreLabel,
+                                }
+                              : { fontSize: 12, color: "#5B5D6E" }
+                          }
+                        >
+                          A Co-Signer is a person who has the right given by you
+                          to generate a new pin on your behalf incase you forget
+                          it.
+                        </Text>
+
+                        <View className="verified-custd-mdl-add-cosigner-body-text-cont">
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextIcon,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-icon"
+                          >
+                            <Image source={{ uri: imageAssets.pkicon }} />
+                          </View>
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-label"
+                          >
+                            As a Co Signer you can help{" "}
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                            >
+                              reset PIN
+                            </Text>
+                          </Text>
+                        </View>
+
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerBodyTextCont,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-body-text-cont"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextIcon,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-icon"
+                          >
+                            <Image
+                              source={{ uri: imageAssets.encryptedIcon }}
+                            />
+                          </View>
+                          <Text
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerBodyTextLabel,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-body-text-label"
+                          >
+                            Don’t worry, they{" "}
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerBodyTextLabelBold,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-body-text-label-bold"
+                            >
+                              will not get access
+                            </Text>{" "}
+                            to your account in any way.
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerButtonsCont,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-buttons-cont"
+                      >
+                        <TouchableOpacity
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerButtonNeut,
+                                  border: "1px solid #0C0C0E",
+                                  color: "#0C0C0E",
+                                }
+                              : {
+                                  border: "1px solid #0C0C0E",
+                                  color: "#0C0C0E",
+                                }
+                          }
+                          className="verified-custd-mdl-add-cosigner-button-neut"
+                          onPress={() => setShowRejectInvitation(true)}
+                        >
+                          <Text>Reject</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-button-action"
+                          onPress={async () => {
+                            await handleAcceptAndRejectInvitation(true);
+                          }}
+                        >
+                          <Text>Accept</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
+                  )}
+
+                  {showRejectInvitation && (
+                    <View
+                      style={
+                        isReactNative
+                          ? {
+                              ...styles.verifiedCustdMdlAddCosignerConfirmBodyContentOutter,
+                            }
+                          : {}
+                      }
+                      className="verified-custd-mdl-add-cosigner-confirm-body-content-outter"
+                    >
+                      <View
+                        style={
+                          isReactNative
+                            ? {
+                                ...styles.verifiedCustdMdlAddCosignerConfirmBodyContent,
+                              }
+                            : {}
+                        }
+                        className="verified-custd-mdl-add-cosigner-confirm-body-content"
+                      >
+                        <View
+                          style={
+                            isReactNative
+                              ? {
+                                  ...styles.verifiedCustdMdlAddCosignerConfirmBodyCont,
+                                }
+                              : {}
+                          }
+                          className="verified-custd-mdl-add-cosigner-confirm-body-cont"
+                        >
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerConfirmBodyHeader,
+                                  }
+                                : {}
+                            }
+                            className="verified-custd-mdl-add-cosigner-confirm-body-header"
+                          >
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyTitle,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-confirm-body-title"
+                            >
+                              Are you sure you want to reject this request?
+                            </Text>
+                            <Text
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerConfirmBodyLabel,
+                                      fontSize: 12,
+                                      color: "#5B5D6E",
+                                    }
+                                  : { fontSize: 12, color: "#5B5D6E" }
+                              }
+                              className="verified-custd-mdl-add-cosigner-confirm-body-label"
+                            >
+                              Once you reject to be a co-signer for{" "}
+                              <Text style={{ fontWeight: "bold" }}>
+                                {props.vaultData?.vaultId}
+                              </Text>
+                              , you will not be able to reset the PIN for them.
+                            </Text>
+                          </View>
+
+                          <View
+                            style={
+                              isReactNative
+                                ? {
+                                    ...styles.verifiedCustdMdlAddCosignerButtonsCont,
+                                    width: "90%",
+                                  }
+                                : { width: "90%" }
+                            }
+                            className="verified-custd-mdl-add-cosigner-buttons-cont"
+                          >
+                            <TouchableOpacity
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-button-action"
+                              onPress={async () => {
+                                await handleAcceptAndRejectInvitation(false);
+                              }}
+                            >
+                              <Text>Yes</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={
+                                isReactNative
+                                  ? {
+                                      ...styles.verifiedCustdMdlAddCosignerButtonAction,
+                                    }
+                                  : {}
+                              }
+                              className="verified-custd-mdl-add-cosigner-button-action"
+                              onPress={() => setShowRejectInvitation(false)}
+                            >
+                              <Text>No</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+              {showInvitationSuccess && (
+                <Success
+                  platform={props.platform}
+                  messageTosend={{ type: "closePopup", key: "", value: "" }}
+                  customTextHeader="Successful"
+                  customTextFooter={
+                    !showRejectInvitation
+                      ? `You have been added as a Co-Signer for ${props.vaultData?.vaultId}`
+                      : `You rejected Co-signer request from ${props.vaultData?.vaultId}`
+                  }
+                />
+              )}
+            </React.Fragment>
+          )}
+
+          {showCustomSuccess && (
+            <Success
+              platform={props.platform}
+              messageTosend={{ type: "closePopup", key: "", value: "" }}
+              customTextHeader="Successful"
+              customTextFooter={
+                customSuccessText?.length > 0
+                  ? customSuccessText
+                  : "You have successfully logged in your account."
+              }
+            />
+          )}
+        </React.Fragment>
+      )}
+
+      {!fontsLoaded && <Text>Loading Module Fonts...</Text>}
+    </ScrollView>
+  );
+};
+
+export default CreatePinPage;

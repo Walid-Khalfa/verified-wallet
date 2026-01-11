@@ -1,0 +1,181 @@
+// platform.ts
+import React, { forwardRef } from "react";
+import { imageAssets } from "../utils/constants";
+import { globalStyles } from "./globalStyle";
+
+let isReactNative = false;
+let isInitialized = false;
+
+let View: any,
+  Text: any,
+  Image: any,
+  ScrollView: any,
+  StyleSheet: any,
+  TextInput: any,
+  TouchableOpacity: any,
+  ActivityIndicator: any,
+  Font: any,
+  AsyncStorage: any,
+  EventEmitter: any,
+  styles: any,
+  rnPasskey: any;
+
+const initPlatform = async () => {
+  if (isInitialized) return;
+
+  const isRunningInReactNative =
+    typeof navigator !== "undefined" && navigator.product === "ReactNative";
+
+  if (isRunningInReactNative) {
+    console.log("Initializing React Native platform...");
+    const RN = await import("react-native");
+    const events = await import("events");
+    const font = await import("expo-font");
+    Font = font.default; //expo pick the required fonts automatically???
+    const reactStorage = await import(
+      "@react-native-async-storage/async-storage"
+    );
+    const passKey = await import("react-native-passkey");
+    rnPasskey = await passKey.Passkey;
+    AsyncStorage = reactStorage.default;
+    EventEmitter = events.EventEmitter;
+
+    const filterPropsRN = ({ className, id, ...rest }: any) => rest;
+
+    const wrapRNTags = (Component: any) => (props: any) =>
+      <Component {...filterPropsRN(props)} />;
+
+    View = wrapRNTags(RN.View);
+    Text = wrapRNTags(RN.Text);
+    Image = wrapRNTags(RN.Image);
+    ScrollView = wrapRNTags(RN.ScrollView);
+    StyleSheet = RN.StyleSheet;
+    TextInput = wrapRNTags(RN.TextInput);
+    TouchableOpacity = wrapRNTags(RN.TouchableOpacity);
+    ActivityIndicator = wrapRNTags(RN.ActivityIndicator);
+    styles = RN.StyleSheet.create(globalStyles);
+    isReactNative = true;
+    console.log("React Native platform initialized.");
+  } else {
+    console.log("Initializing Web platform...");
+    const { motion } = await import("framer-motion");
+
+    View = ({ onPress, ...rest }: any) => <div onClick={onPress} {...rest} />;
+    Text = ({ onPress, ...rest }: any) => <span onClick={onPress} {...rest} />;
+    Image = ({ onPress, source, ...rest }: any) => (
+      <img onClick={onPress} {...rest} src={source?.uri} />
+    );
+    ScrollView = (props: any) => (
+      <div style={{ overflowY: "auto", ...props.style }}>{props.children}</div>
+    );
+    StyleSheet = {
+      create: (styles: any) => styles,
+    };
+    styles = {};
+    TextInput = forwardRef(
+      (
+        {
+          onChangeText,
+          onInput,
+          onKeyDown,
+          onKeyPress,
+          value,
+          keyboardType,
+          secureTextEntry,
+          onSubmitEditing,
+          blurOnSubmit,
+          placeholderTextColor,
+          ...rest
+        }: any,
+        ref
+      ) => (
+        <input
+          {...rest}
+          ref={ref}
+          value={value}
+          onInput={(e: any) => {
+            onInput?.(e);
+            onChangeText?.(e.target.value);
+          }}
+          onKeyDown={(e: any) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmitEditing?.(e);
+            }
+            onKeyDown?.(e);
+            onKeyPress?.(e);
+          }}
+          type={
+            secureTextEntry
+              ? "password"
+              : keyboardType === "numeric" || keyboardType === "number-pad"
+              ? "tel"
+              : "text"
+          }
+          onChange={() => {}}
+        />
+      )
+    );
+
+    TouchableOpacity = ({ onPress, style, ...rest }: any) => (
+      <button
+        style={{ outline: "none", border: "none", ...style }}
+        onClick={onPress}
+        {...rest}
+      >
+        {rest.children}
+      </button>
+    );
+
+    ActivityIndicator = ({ color, size, ...rest }: any) => (
+      <motion.img
+        height="50px"
+        width="50px"
+        src={imageAssets.loadingIcon}
+        alt="Loading..."
+        animate={{
+          rotate: 360,
+          scale: [1, 1.5, 1],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: "linear",
+        }}
+        {...rest}
+      />
+    );
+
+    isReactNative = false;
+    console.log("Web platform initialized.");
+  }
+
+  isInitialized = true;
+};
+
+const getPlatformComponents = () => {
+  if (!isInitialized) {
+    throw new Error(
+      "Platform not initialized. Call `await initPlatform()` first."
+    );
+  }
+
+  return {
+    isReactNative,
+    View,
+    Text,
+    Image,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    ActivityIndicator,
+    Font,
+    AsyncStorage,
+    EventEmitter,
+    styles,
+    rnPasskey,
+  };
+};
+
+export { initPlatform, getPlatformComponents };
