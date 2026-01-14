@@ -266,7 +266,7 @@ export const encryptString = (text: string, secretKey: string) => {
 ### 1. **Critical Impact** (60% weight)
 - ✅ Direct loss of private keys (CVSS 9.5)
 - ✅ Private key recovery in seconds (4-digit PINs)
-- ✅ Affects ALL users of the wallet
+- ✅ Affects all PIN-based wallet users
 - ✅ Exploitable with basic tools
 
 ### 2. **Quality of PoC** (30% weight)
